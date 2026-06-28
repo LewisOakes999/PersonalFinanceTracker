@@ -1,0 +1,16 @@
+{
+  "name": "personal-finance-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A single-user personal finance tracker (Vite/React/TS client + Express/Prisma/Postgres server).",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "db:setup": "npm --prefix server run db:setup"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

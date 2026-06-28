@@ -1,0 +1,276 @@
+// Prisma schema for the Personal Finance Tracker.
+// Multi-user: every record belongs to a User. Money is stored as Decimal.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TxnType {
+  income
+  expense
+}
+
+model User {
+  id           String                 @id @default(cuid())
+  email        String                 @unique
+  passwordHash String
+  createdAt    DateTime               @default(now())
+  accounts     Account[]
+  categories   Category[]
+  transactions Transaction[]
+  transfers    Transfer[]
+  budgets      Budget[]
+  recurring    RecurringTransaction[]
+  recurringTransfers RecurringTransfer[]
+  goals        Goal[]
+  valuations   AccountValuation[]
+  exchangeRates ExchangeRate[]
+  attachments  Attachment[]
+  settings     Settings?
+}
+
+model Account {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  type            String // current | savings | credit | ...
+  currency        String        @default("GBP")
+  openingBalance  Decimal       @default(0) @db.Decimal(14, 2)
+  isIsa           Boolean       @default(false)
+  isPremiumBonds  Boolean       @default(false)
+  isInvestment    Boolean       @default(false) // variable returns (stocks & shares)
+  isPension       Boolean       @default(false) // pension pot (annual allowance, tax-relieved)
+  interestRate    Decimal       @default(0) @db.Decimal(6, 3) // annual rate / expected return (%)
+  volatility      Decimal       @default(0) @db.Decimal(6, 3) // annual volatility / std-dev (%) for investments
+  transactions    Transaction[]
+  transfersOut    Transfer[]             @relation("TransferFrom")
+  transfersIn     Transfer[]             @relation("TransferTo")
+  recurring       RecurringTransaction[]
+  recurTransfersOut RecurringTransfer[]  @relation("RecurTransferFrom")
+  recurTransfersIn  RecurringTransfer[]  @relation("RecurTransferTo")
+  goals           Goal[]
+  valuations      AccountValuation[]
+  createdAt       DateTime               @default(now())
+
+  @@index([userId])
+}
+
+// A dated "the account is actually worth this" snapshot. Supersedes opening
+// balance and activity up to its date — used for mark-to-market (investments,
+// pensions) and balance reconciliation (cash accounts).
+model AccountValuation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date      DateTime
+  value     Decimal  @db.Decimal(14, 2)
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([accountId])
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  type         TxnType
+  color        String        @default("#38bdf8")
+  taxTag       String? // interest | dividend | giftAid — for the tax-year summary
+  transactions Transaction[]
+  budgets      Budget[]
+  recurring    RecurringTransaction[]
+  splits       TransactionSplit[]
+  createdAt    DateTime      @default(now())
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  amount      Decimal  @db.Decimal(14, 2)
+  type        TxnType
+  description String   @default("")
+  note        String?
+  categoryId  String
+  accountId   String
+  category    Category @relation(fields: [categoryId], references: [id])
+  account     Account  @relation(fields: [accountId], references: [id])
+  recurringId String?
+  recurring   RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  splits      TransactionSplit[]
+  attachments Attachment[]
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([date])
+  @@index([categoryId])
+  @@index([accountId])
+}
+
+// A line item splitting one transaction across multiple categories. When a
+// transaction has splits, category breakdowns use the splits instead of the
+// transaction's own category. The split amounts should sum to the total.
+model TransactionSplit {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id])
+  amount        Decimal     @db.Decimal(14, 2)
+
+  @@index([transactionId])
+}
+
+// A file (e.g. a receipt) attached to a transaction. Stored in the DB for a
+// simple self-hosted setup.
+model Attachment {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  filename      String
+  mimeType      String
+  size          Int
+  data          Bytes
+  createdAt     DateTime    @default(now())
+
+  @@index([userId])
+  @@index([transactionId])
+}
+
+// Per-currency exchange rate to the user's base (display) currency.
+// rate = value of 1 unit of `currency` expressed in the base currency.
+model ExchangeRate {
+  id       String  @id @default(cuid())
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency String
+  rate     Decimal @db.Decimal(18, 8)
+
+  @@unique([userId, currency])
+  @@index([userId])
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId String
+  month      String // YYYY-MM
+  amount     Decimal  @db.Decimal(14, 2)
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, month])
+  @@index([userId])
+}
+
+// A transfer moves money between two of the user's own accounts. It is NOT
+// income or expense, so it is excluded from those totals — it only shifts
+// balances (− from, + to).
+model Transfer {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime
+  amount        Decimal  @db.Decimal(14, 2)
+  fromAccountId String
+  toAccountId   String
+  fromAccount   Account  @relation("TransferFrom", fields: [fromAccountId], references: [id])
+  toAccount     Account  @relation("TransferTo", fields: [toAccountId], references: [id])
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([date])
+}
+
+enum RecurFrequency {
+  weekly
+  fortnightly
+  monthly
+  quarterly
+  yearly
+}
+
+// A template that auto-posts Transactions on a schedule.
+model RecurringTransaction {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         TxnType
+  amount       Decimal        @db.Decimal(14, 2)
+  description  String         @default("")
+  note         String?
+  categoryId   String
+  accountId    String
+  category     Category       @relation(fields: [categoryId], references: [id])
+  account      Account        @relation(fields: [accountId], references: [id])
+  frequency    RecurFrequency
+  nextDate     DateTime // next occurrence to post
+  endDate      DateTime? // optional stop date
+  active       Boolean        @default(true)
+  transactions Transaction[]
+  createdAt    DateTime       @default(now())
+
+  @@index([userId])
+}
+
+// A template that auto-posts Transfers on a schedule.
+model RecurringTransfer {
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Decimal        @db.Decimal(14, 2)
+  fromAccountId String
+  toAccountId   String
+  fromAccount   Account        @relation("RecurTransferFrom", fields: [fromAccountId], references: [id])
+  toAccount     Account        @relation("RecurTransferTo", fields: [toAccountId], references: [id])
+  note          String?
+  frequency     RecurFrequency
+  nextDate      DateTime
+  endDate       DateTime?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+
+  @@index([userId])
+}
+
+// A savings target. Either linked to an account (progress = its balance) or
+// tracked manually via savedAmount.
+model Goal {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  targetAmount Decimal   @db.Decimal(14, 2)
+  savedAmount  Decimal   @default(0) @db.Decimal(14, 2)
+  targetDate   DateTime?
+  accountId    String?
+  account      Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Per-user application settings (display currency, etc.).
+model Settings {
+  userId   String @id
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency String @default("GBP")
+}

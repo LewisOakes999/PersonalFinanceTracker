@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Account" ADD COLUMN     "interestRate" DECIMAL(6,3) NOT NULL DEFAULT 0,
+ADD COLUMN     "isIsa" BOOLEAN NOT NULL DEFAULT false;
+

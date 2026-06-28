@@ -1,0 +1,305 @@
+export type TxnType = "income" | "expense";
+
+export interface User {
+  id: string;
+  email: string;
+}
+
+export type TaxTag = "interest" | "dividend" | "giftAid";
+
+export interface Account {
+  id: string;
+  name: string;
+  type: string;
+  currency: string;
+  openingBalance: number;
+  isIsa: boolean;
+  isPremiumBonds: boolean;
+  isInvestment: boolean;
+  isPension: boolean;
+  interestRate: number;
+  volatility: number;
+  createdAt?: string;
+}
+
+export interface AccountRef {
+  id: string;
+  name: string;
+}
+
+export interface Valuation {
+  id: string;
+  accountId: string;
+  date: string;
+  value: number;
+  note: string | null;
+}
+
+export interface Transfer {
+  id: string;
+  date: string;
+  amount: number;
+  fromAccountId: string;
+  toAccountId: string;
+  fromAccount: AccountRef;
+  toAccount: AccountRef;
+  note: string | null;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  type: TxnType;
+  color: string;
+  taxTag: TaxTag | null;
+}
+
+export interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface TransactionSplit {
+  id: string;
+  categoryId: string;
+  category: Category;
+  amount: number;
+}
+
+export interface Transaction {
+  id: string;
+  date: string;
+  amount: number;
+  type: TxnType;
+  description: string;
+  note: string | null;
+  categoryId: string;
+  accountId: string;
+  category: Category;
+  account: Account;
+  recurringId: string | null;
+  splits: TransactionSplit[];
+}
+
+export type RecurFrequency = "weekly" | "fortnightly" | "monthly" | "quarterly" | "yearly";
+
+export interface Recurring {
+  id: string;
+  type: TxnType;
+  amount: number;
+  description: string;
+  note: string | null;
+  categoryId: string;
+  accountId: string;
+  category: Category;
+  account: Account;
+  frequency: RecurFrequency;
+  nextDate: string;
+  endDate: string | null;
+  active: boolean;
+}
+
+export interface RecurringTransfer {
+  id: string;
+  amount: number;
+  fromAccountId: string;
+  toAccountId: string;
+  fromAccount: AccountRef;
+  toAccount: AccountRef;
+  note: string | null;
+  frequency: RecurFrequency;
+  nextDate: string;
+  endDate: string | null;
+  active: boolean;
+}
+
+export interface Goal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  targetDate: string | null;
+  accountId: string | null;
+  accountName: string | null;
+  saved: number;
+  remaining: number;
+  progress: number;
+}
+
+export interface NetWorthPoint {
+  month: string;
+  netWorth: number;
+}
+
+export interface IsaAllowance {
+  taxYearLabel: string;
+  start: string;
+  end: string;
+  allowance: number;
+  used: number;
+  remaining: number;
+  isaAccounts: { id: string; name: string }[];
+  hasIsa: boolean;
+}
+
+export interface Budget {
+  id: string;
+  categoryId: string;
+  month: string;
+  amount: number;
+  spent: number;
+  category: Category;
+}
+
+export interface Settings {
+  userId: string;
+  currency: string;
+}
+
+export interface Totals {
+  income: number;
+  expenses: number;
+  net: number;
+}
+
+export interface AccountBalance {
+  id: string;
+  name: string;
+  type: string;
+  currency: string;
+  isIsa: boolean;
+  isPremiumBonds: boolean;
+  isInvestment: boolean;
+  isPension: boolean;
+  interestRate: number;
+  balance: number; // in the account's own currency
+  baseBalance: number; // converted to the base/display currency
+}
+
+export interface ExchangeRate {
+  id: string;
+  currency: string;
+  rate: number;
+}
+
+export interface TaxSummary {
+  taxYearLabel: string;
+  start: string;
+  end: string;
+  income: { total: number; byCategory: { name: string; total: number }[] };
+  interest: { taxable: number; taxFree: number };
+  dividends: { taxable: number; taxFree: number; allowance: number };
+  giftAid: number;
+  pension: { contributions: number; allowance: number; remaining: number };
+  isa: { contributions: number; allowance: number; remaining: number };
+  capitalGains: { tracked: boolean; note: string };
+  estimate: {
+    taxableIncome: number;
+    personalAllowance: number;
+    personalSavingsAllowance: number;
+    nonDividendTax: number;
+    dividendTax: number;
+    total: number;
+    effectiveRate: number;
+  };
+}
+
+export interface InvestmentForecastMonth {
+  month: string;
+  monthIndex: number;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  invested: number;
+}
+
+export interface InvestmentForecast {
+  accounts: {
+    id: string;
+    name: string;
+    isIsa: boolean;
+    expectedReturn: number;
+    volatility: number;
+    startingBalance: number;
+  }[];
+  startingValue: number;
+  monthlyContribution: number;
+  expectedReturn: number;
+  volatility: number;
+  months: InvestmentForecastMonth[];
+  target: number | null;
+  summary: {
+    finalP10: number;
+    finalP25: number;
+    finalP50: number;
+    finalP75: number;
+    finalP90: number;
+    finalMean: number;
+    totalContributed: number;
+    invested: number;
+    medianProfit: number;
+    probProfit: number;
+    probTarget: number | null;
+  };
+}
+
+export interface ForecastMonth {
+  month: string;
+  income: number;
+  expenses: number;
+  interest: number;
+  taxFreeInterest: number;
+  net: number;
+  balance: number;
+}
+
+export interface ForecastAccount {
+  id: string;
+  name: string;
+  type: string;
+  isIsa: boolean;
+  isPremiumBonds: boolean;
+  interestRate: number;
+  startingBalance: number;
+  projectedBalance: number;
+}
+
+export interface Forecast {
+  assumptions: {
+    monthlyIncome: number;
+    monthlyExpenses: number;
+    lookbackMonths: number;
+    avgIncome: number;
+    avgExpenses: number;
+  };
+  startingBalance: number;
+  endingBalance: number;
+  accounts: ForecastAccount[];
+  months: ForecastMonth[];
+  totals: { income: number; expenses: number; interest: number; taxFreeInterest: number; net: number };
+}
+
+export interface Balances {
+  accounts: AccountBalance[];
+  overall: number; // in the base currency
+  baseCurrency: string;
+}
+
+export interface CategoryTotal {
+  categoryId: string;
+  category: string;
+  color: string;
+  total: number;
+}
+
+export interface TrendPoint {
+  month: string;
+  income: number;
+  expenses: number;
+  net: number;
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+client/node_modules/
+server/node_modules/
+client/dist/
+server/dist/
+
+# Local Claude Code settings and redesign archive
+.claude/settings.local.json
+*.zip
