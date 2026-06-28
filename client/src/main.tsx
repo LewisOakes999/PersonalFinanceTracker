@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import AuthScreen from "./components/AuthScreen";
+import Landing from "./pages/Landing";
 import { Bloom } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { CurrencyProvider } from "./lib/CurrencyContext";
@@ -10,6 +11,8 @@ import "./index.css";
 
 function Root() {
   const { loading, user } = useAuth();
+  // Logged-out flow: marketing landing → auth screen (in the chosen mode).
+  const [authMode, setAuthMode] = useState<"login" | "signup" | null>(null);
 
   if (loading) {
     return (
@@ -20,7 +23,13 @@ function Root() {
     );
   }
 
-  if (!user) return <AuthScreen />;
+  if (!user) {
+    return authMode ? (
+      <AuthScreen initialMode={authMode} onBack={() => setAuthMode(null)} />
+    ) : (
+      <Landing onLogin={() => setAuthMode("login")} onSignup={() => setAuthMode("signup")} />
+    );
+  }
 
   // Currency settings require auth, so only mount the provider once signed in.
   return (

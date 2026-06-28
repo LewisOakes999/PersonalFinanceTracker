@@ -2,10 +2,20 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { Bloom, Button, Field } from "./ui";
+import { PasswordStrength } from "./PasswordStrength";
+import { passwordValid } from "../lib/password";
 
-export default function AuthScreen() {
+export default function AuthScreen({
+  initialMode,
+  onBack,
+}: {
+  initialMode?: "login" | "signup";
+  onBack?: () => void;
+} = {}) {
   const { needsSetup, login, signup } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">(needsSetup ? "signup" : "login");
+  const [mode, setMode] = useState<"login" | "signup">(
+    initialMode ?? (needsSetup ? "signup" : "login")
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -24,7 +34,10 @@ export default function AuthScreen() {
     e.preventDefault();
     setError("");
     if (isSignup) {
-      if (password.length < 8) return setError("Password must be at least 8 characters.");
+      if (!passwordValid(password))
+        return setError(
+          "Password must be at least 8 characters and include an uppercase letter and a symbol."
+        );
       if (password !== confirm) return setError("Passwords do not match.");
     }
     setBusy(true);
@@ -42,6 +55,14 @@ export default function AuthScreen() {
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden p-4">
       <Bloom />
       <div className="glass relative z-[1] w-full max-w-[400px] rounded-panel p-8">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="text-glass-3 hover:text-glass mb-4 text-[13px] transition-colors"
+          >
+            ← Back to home
+          </button>
+        )}
         {/* Brand */}
         <div className="mb-7 flex items-center gap-3">
           <div
@@ -96,6 +117,7 @@ export default function AuthScreen() {
               required
             />
           </Field>
+          {isSignup && <PasswordStrength password={password} />}
           {isSignup && (
             <Field label="Confirm password">
               <input

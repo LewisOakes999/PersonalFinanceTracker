@@ -17,9 +17,21 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
 export const authRouter = Router();
 
-const credentials = z.object({
+// New/changed passwords must meet the strength policy. Login does NOT enforce
+// this (existing passwords must still work), it only needs a value to check.
+const strongPassword = z.string().refine(
+  (pw) => pw.length >= 8 && /[A-Z]/.test(pw) && /[^A-Za-z0-9]/.test(pw),
+  { message: "Password must be at least 8 characters and include an uppercase letter and a symbol." }
+);
+
+const signupCredentials = z.object({
   email: z.string().email(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: strongPassword,
+});
+
+const loginCredentials = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
 });
 
 function publicUser(user: { id: string; email: string }) {
@@ -40,7 +52,7 @@ authRouter.post(
   "/setup",
   authLimiter,
   asyncHandler(async (req, res) => {
-    const { email, password } = credentials.parse(req.body);
+    const { email, password } = signupCredentials.parse(req.body);
     const user = await prisma.user.create({
       data: { email: email.toLowerCase(), passwordHash: hashPassword(password) },
     });
@@ -55,7 +67,7 @@ authRouter.post(
   "/login",
   authLimiter,
   asyncHandler(async (req, res) => {
-    const { email, password } = credentials.parse(req.body);
+    const { email, password } = loginCredentials.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user || !verifyPassword(password, user.passwordHash)) {
       throw new HttpError(401, "Invalid email or password");
@@ -84,7 +96,7 @@ authRouter.put(
       .object({
         currentPassword: z.string().min(1),
         email: z.string().email().optional(),
-        newPassword: z.string().min(8).optional(),
+        newPassword: strongPassword.optional(),
       })
       .parse(req.body);
 

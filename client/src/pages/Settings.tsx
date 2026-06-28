@@ -25,6 +25,8 @@ import { RISK_PROFILES, matchProfile, riskHint } from "../lib/riskProfiles";
 import { useCurrency } from "../lib/CurrencyContext";
 import { useAuth } from "../lib/AuthContext";
 import { toast } from "../lib/toast";
+import { passwordValid } from "../lib/password";
+import { PasswordStrength } from "../components/PasswordStrength";
 
 const ACCOUNT_TYPES = ["current", "savings", "credit", "cash", "investment"];
 
@@ -149,7 +151,10 @@ function SecurityManager() {
     setMessage("");
     if (!currentPassword) return setError("Enter your current password to confirm changes.");
     if (newPassword) {
-      if (newPassword.length < 8) return setError("New password must be at least 8 characters.");
+      if (!passwordValid(newPassword))
+        return setError(
+          "New password must be at least 8 characters and include an uppercase letter and a symbol."
+        );
       if (newPassword !== confirm) return setError("New passwords do not match.");
     }
     const emailChanged = email.trim() && email.trim() !== user?.email;
@@ -193,10 +198,11 @@ function SecurityManager() {
             className="w-full"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="At least 8 characters"
+            placeholder="8+ chars, an uppercase letter and a symbol"
             autoComplete="new-password"
           />
         </Field>
+        {newPassword && <PasswordStrength password={newPassword} />}
         {newPassword && (
           <Field label="Confirm new password">
             <input
