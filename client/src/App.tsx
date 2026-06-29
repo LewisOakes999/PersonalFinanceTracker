@@ -66,7 +66,7 @@ function SidebarContent({
   onSignOut: () => void;
 }) {
   return (
-    <div className="glass flex h-full flex-col gap-[18px] rounded-3xl px-4 py-5">
+    <div className="glass flex h-full w-full min-w-0 flex-col gap-[18px] rounded-3xl px-4 py-5">
       {/* Brand lockup */}
       <div className="flex items-center gap-3 border-b border-white/10 px-2 pb-4 pt-1.5">
         <BrandTile />
@@ -97,7 +97,7 @@ function SidebarContent({
       </nav>
 
       {/* User chip */}
-      <div className="glass-nested mt-auto flex items-center gap-2.5 rounded-2xl px-3 py-2.5">
+      <div className="glass-nested mt-auto flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2.5">
         <div
           className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
           style={{
@@ -154,7 +154,7 @@ export default function App() {
         </div>
 
         {/* Desktop sidebar (always visible ≥ md) */}
-        <aside className="hidden w-[248px] shrink-0 p-[18px] md:flex">
+        <aside className="hidden w-[248px] shrink-0 overflow-hidden p-[18px] md:flex">
           <SidebarContent tab={tab} onNavigate={go} email={user?.email} onSignOut={logout} />
         </aside>
 
@@ -163,7 +163,7 @@ export default function App() {
         {navOpen && (
           <div className="contents md:hidden">
             <div className="fixed inset-0 z-30 bg-black/60" onClick={() => setNavOpen(false)} aria-hidden />
-            <aside className="fixed inset-y-0 left-0 z-40 flex w-[248px] p-[18px]">
+            <aside className="fixed inset-y-0 left-0 z-40 flex w-[248px] overflow-hidden p-[18px]">
               <SidebarContent tab={tab} onNavigate={go} email={user?.email} onSignOut={logout} />
             </aside>
           </div>
