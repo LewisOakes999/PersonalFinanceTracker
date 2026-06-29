@@ -139,7 +139,7 @@ export default function App() {
         <div className="bloom bloom-3" />
       </div>
 
-      <div className="relative z-[1] flex h-screen flex-col md:flex-row">
+      <div className="relative z-[1] grid h-screen grid-cols-1 grid-rows-[auto_1fr] md:grid-cols-[248px_minmax(0,1fr)] md:grid-rows-1">
         {/* Mobile top bar */}
         <div className="flex items-center gap-3 p-4 md:hidden">
           <button
@@ -158,9 +158,10 @@ export default function App() {
           <SidebarContent tab={tab} onNavigate={go} email={user?.email} onSignOut={logout} />
         </aside>
 
-        {/* Mobile drawer (mounted only when open, < md) */}
+        {/* Mobile drawer (mounted only when open, < md) — `contents` so the
+            fixed overlay never consumes a grid cell */}
         {navOpen && (
-          <div className="md:hidden">
+          <div className="contents md:hidden">
             <div className="fixed inset-0 z-30 bg-black/60" onClick={() => setNavOpen(false)} aria-hidden />
             <aside className="fixed inset-y-0 left-0 z-40 flex w-[248px] p-[18px]">
               <SidebarContent tab={tab} onNavigate={go} email={user?.email} onSignOut={logout} />
@@ -169,7 +170,7 @@ export default function App() {
         )}
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-10 pt-2 md:px-[30px] md:pl-1.5 md:pt-[26px]">
+        <main className="min-w-0 overflow-y-auto px-4 pb-10 pt-2 md:px-[30px] md:pl-1.5 md:pt-[26px]">
           {tab === "dashboard" && <Dashboard />}
           {tab === "transactions" && <Transactions />}
           {tab === "analytics" && <Analytics />}
