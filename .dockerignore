@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/build
+**/.env
+**/.env.*
+!**/.env.production.example
+**/*.log
+.git
+.gitignore
+.claude
+*.zip
+.DS_Store

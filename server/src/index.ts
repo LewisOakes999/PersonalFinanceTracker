@@ -1,5 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ZodError } from "zod";
 import { HttpError } from "./lib/http.js";
 import { requireAuth } from "./lib/auth.js";
@@ -54,6 +56,20 @@ app.use("/api/summary", summaryRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/export", exportRouter);
+
+// In production, serve the built client from this same server so the app and
+// the API share one origin (no CORS, no separate static host). In development
+// the Vite dev server handles the client instead.
+if (process.env.NODE_ENV === "production") {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const clientDist =
+    process.env.CLIENT_DIST || path.resolve(__dirname, "../../client/dist");
+  app.use(express.static(clientDist));
+  // SPA fallback: any non-API route returns index.html.
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
 
 // Central error handler.
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

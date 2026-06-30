@@ -1,0 +1,37 @@
+# Render blueprint — provisions a PostgreSQL database and one web service
+# (the Express server, which also serves the built client). Deploy by pushing
+# this repo and creating a "Blueprint" in the Render dashboard.
+#
+# NOTE: Render's *free* Postgres is wiped after ~30 days. For anything real —
+# and especially for a public app holding other people's data — use a paid
+# database tier (or an external managed Postgres like Neon) and turn on backups.
+
+databases:
+  - name: finance-tracker-db
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: finance-tracker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Connection string is injected from the database above.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: finance-tracker-db
+          property: connectionString
+      # A long random secret for signing auth tokens — generated once by Render.
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      # Set this to your final URL (e.g. https://finance-tracker.onrender.com or
+      # your custom domain) after the first deploy. Only matters if you ever
+      # split the client onto a different origin; same-origin needs no CORS.
+      - key: CLIENT_ORIGIN
+        sync: false
