@@ -184,13 +184,7 @@ export default function App() {
       </div>
 
       {showOnboarding && (
-        <Onboarding
-          onClose={finishOnboarding}
-          onAddAccount={() => {
-            finishOnboarding();
-            go("settings");
-          }}
-        />
+        <Onboarding onNavigate={(t) => go(t as Tab)} onFinish={finishOnboarding} />
       )}
     </div>
   );

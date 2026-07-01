@@ -111,7 +111,7 @@ export default function Budgets() {
       {/* Add budget */}
       <Tile className="p-[22px]">
         <SectionTitle>Add / Update Budget</SectionTitle>
-        <form onSubmit={addBudget} className="flex flex-wrap items-end gap-3">
+        <form onSubmit={addBudget} data-tour="add-budget" className="flex flex-wrap items-end gap-3">
           <Field label="Category">
             <select value={newCat} onChange={(e) => setNewCat(e.target.value)}>
               <option value="">Select…</option>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useCurrency } from "../lib/CurrencyContext";
 import { currentMonth } from "../lib/format";
+import { defaultPeriod, periodParams } from "../lib/period";
 
 // General money-saving advice, always available even before data loads.
 const SAVING_TIPS = [
@@ -24,16 +25,23 @@ export function SidebarTips() {
   const [i, setI] = useState(0);
   const paused = useRef(false);
 
-  // Build personalised tips from the user's budgets + ISA usage.
+  // Build personalised tips from the user's own data.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const personal: string[] = [];
       try {
-        const [budgets, isa] = await Promise.all([
+        const params = periodParams(defaultPeriod("month"));
+        const [budgets, isa, totals, cats, goals, balances] = await Promise.all([
           api.listBudgets(currentMonth()).catch(() => []),
           api.isaAllowance().catch(() => null),
+          api.totals(params).catch(() => null),
+          api.byCategory(params, "expense").catch(() => []),
+          api.listGoals().catch(() => []),
+          api.balances().catch(() => null),
         ]);
+
+        // Budgets closest to (or over) their limit.
         const ranked = budgets
           .filter((b) => b.amount > 0)
           .map((b) => ({ ...b, pct: b.spent / b.amount }))
@@ -49,12 +57,44 @@ export function SidebarTips() {
             personal.push(`On track: ${pct}% of your ${b.category.name} budget used, ${format(b.amount - b.spent)} to spare.`);
           }
         }
+
+        // Savings rate this month.
+        if (totals) {
+          if (totals.net > 0) {
+            personal.push(`You've saved ${format(totals.net)} so far this month — nice work.`);
+          } else if (totals.net < 0) {
+            personal.push(`You've spent ${format(-totals.net)} more than you've earned this month. Ease off where you can.`);
+          }
+        }
+
+        // Biggest spending category this month.
+        if (cats.length) {
+          personal.push(`Your biggest expense this month is ${format(cats[0].total)} on ${cats[0].category}.`);
+        }
+
+        // ISA allowance.
         if (isa?.hasIsa) {
           personal.push(
             isa.remaining > 0
               ? `ISA: ${format(isa.used)} of ${format(isa.allowance)} used — ${format(isa.remaining)} of allowance left this tax year.`
-              : `Nice — you've fully used your ${format(isa.allowance)} ISA allowance this tax year.`
+              : `You've fully used your ${format(isa.allowance)} ISA allowance this tax year.`
           );
+        }
+
+        // Nearest-to-start goal.
+        const openGoals = goals
+          .filter((g) => g.remaining > 0 && g.targetAmount > 0)
+          .sort((a, b) => a.saved / a.targetAmount - b.saved / b.targetAmount);
+        if (openGoals.length) {
+          const g = openGoals[0];
+          const pct = Math.min(100, Math.round((g.saved / g.targetAmount) * 100));
+          personal.push(`You're ${pct}% toward “${g.name}” — ${format(g.remaining)} to go.`);
+        }
+
+        // Net worth.
+        if (balances?.accounts?.length) {
+          const n = balances.accounts.length;
+          personal.push(`Your net worth is ${format(balances.overall)} across ${n} account${n > 1 ? "s" : ""}.`);
         }
       } catch {
         /* fall back to general tips */
@@ -108,7 +148,7 @@ export function SidebarTips() {
           style={{ transform: `translateX(-${i * 100}%)` }}
         >
           {tips.map((t, idx) => (
-            <p key={idx} className="text-glass-2 min-h-[52px] w-full shrink-0 text-[12px] leading-snug">
+            <p key={idx} className="text-glass-2 flex min-h-[84px] w-full shrink-0 items-start text-[12px] leading-relaxed">
               {t}
             </p>
           ))}

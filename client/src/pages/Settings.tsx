@@ -394,7 +394,7 @@ function AccountsManager({
           />
           Pension
         </label>
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" data-tour="add-account">
           Add Account
         </Button>
       </form>

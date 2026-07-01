@@ -135,7 +135,7 @@ export default function Transactions() {
           </Button>
           <Button onClick={() => setShowRecurring(true)}>↻ Recurring</Button>
           <Button onClick={() => setEditingTransfer("new")}>⇄ Transfer</Button>
-          <Button variant="primary" onClick={() => setEditing("new")}>
+          <Button variant="primary" data-tour="add-transaction" onClick={() => setEditing("new")}>
             + Add Transaction
           </Button>
         </div>
