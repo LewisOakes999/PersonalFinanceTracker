@@ -181,11 +181,11 @@ export default function App() {
           {tab === "tax" && <Tax />}
           {tab === "settings" && <Settings />}
         </main>
-      </div>
 
-      {showOnboarding && (
-        <Onboarding onNavigate={(t) => go(t as Tab)} onFinish={finishOnboarding} />
-      )}
+        {showOnboarding && (
+          <Onboarding onNavigate={(t) => go(t as Tab)} onFinish={finishOnboarding} />
+        )}
+      </div>
     </div>
   );
 }

@@ -307,7 +307,7 @@ function AccountsManager({
           />
         ))}
       </ul>
-      <form onSubmit={add} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={add} data-tour="add-account" className="flex flex-wrap items-end gap-3">
         <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Joint Account" />
         </Field>
@@ -394,7 +394,7 @@ function AccountsManager({
           />
           Pension
         </label>
-        <Button type="submit" variant="primary" data-tour="add-account">
+        <Button type="submit" variant="primary">
           Add Account
         </Button>
       </form>

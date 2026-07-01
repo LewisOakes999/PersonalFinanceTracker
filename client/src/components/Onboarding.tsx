@@ -108,30 +108,48 @@ export function Onboarding({
   }, [step]);
 
   const pad = 8;
+  const vw = typeof window !== "undefined" ? window.innerWidth : 0;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 0;
+  const hole = rect
+    ? {
+        top: Math.max(0, rect.top - pad),
+        left: Math.max(0, rect.left - pad),
+        right: Math.min(vw, rect.right + pad),
+        bottom: Math.min(vh, rect.bottom + pad),
+      }
+    : null;
+  const dim = "rgba(2,6,23,0.72)";
+
   return (
     <>
-      {/* Dim + spotlight (spotlight lets clicks through to the real element) */}
-      {rect ? (
-        <div
-          className="pointer-events-none fixed z-[59] rounded-xl transition-[top,left,width,height] duration-300"
-          style={{
-            top: rect.top - pad,
-            left: rect.left - pad,
-            width: rect.width + pad * 2,
-            height: rect.height + pad * 2,
-            boxShadow: "0 0 0 9999px rgba(2,6,23,0.74)",
-            outline: "2px solid rgba(100,210,255,0.9)",
-            outlineOffset: 2,
-          }}
-        />
+      {/* Dim. When a target exists we dim with four panels around an empty hole,
+          so the highlighted element has nothing over it and stays fully clickable.
+          z-45 keeps the tour below app modals (z-50). */}
+      {hole ? (
+        <>
+          <div className="fixed z-[45]" style={{ top: 0, left: 0, right: 0, height: hole.top, background: dim }} />
+          <div className="fixed z-[45]" style={{ top: hole.bottom, left: 0, right: 0, bottom: 0, background: dim }} />
+          <div className="fixed z-[45]" style={{ top: hole.top, left: 0, width: hole.left, height: hole.bottom - hole.top, background: dim }} />
+          <div className="fixed z-[45]" style={{ top: hole.top, left: hole.right, right: 0, height: hole.bottom - hole.top, background: dim }} />
+          <div
+            className="pointer-events-none fixed z-[46] rounded-lg transition-all duration-200"
+            style={{
+              top: hole.top,
+              left: hole.left,
+              width: hole.right - hole.left,
+              height: hole.bottom - hole.top,
+              boxShadow: "0 0 0 2px rgba(100,210,255,0.9), 0 0 0 6px rgba(100,210,255,0.22)",
+            }}
+          />
+        </>
       ) : (
-        <div className="fixed inset-0 z-[59] bg-black/70" />
+        <div className="fixed inset-0 z-[45]" style={{ background: dim }} />
       )}
 
       {/* Instruction card */}
       <div
-        className={`fixed z-[61] w-[340px] max-w-[calc(100vw-2rem)] ${
-          rect ? "bottom-6 right-6" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        className={`fixed z-[48] w-[340px] max-w-[calc(100vw-2rem)] ${
+          hole ? "bottom-6 right-6" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         }`}
       >
         <div className="glass relative rounded-panel p-5">
