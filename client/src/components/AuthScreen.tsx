@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { Bloom, Button, Field } from "./ui";
+import { BrandTile } from "./BrandMark";
 import { PasswordStrength } from "./PasswordStrength";
 import { passwordValid } from "../lib/password";
 
@@ -65,19 +66,10 @@ export default function AuthScreen({
         )}
         {/* Brand */}
         <div className="mb-7 flex items-center gap-3">
-          <div
-            className="flex h-[42px] w-[42px] items-center justify-center rounded-xl text-xl font-bold text-white"
-            style={{
-              background: "linear-gradient(140deg, #0a84ff, #30d5c8)",
-              boxShadow:
-                "inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 16px -4px rgba(10,132,255,0.6)",
-            }}
-          >
-            £
-          </div>
+          <BrandTile size={42} />
           <div>
             <div className="text-glass text-[17px] font-semibold tracking-tight">
-              Finance Tracker
+              SuperSaver
             </div>
             <div className="text-glass-3 text-xs">
               {isSignup ? "Create an account" : "Sign in to continue"}

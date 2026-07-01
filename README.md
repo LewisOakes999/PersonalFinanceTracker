@@ -1,4 +1,4 @@
-# Personal Finance Tracker
+# SuperSaver
 
 A self-hosted, multi-user personal finance tracker that runs locally. Track income,
 expenses and transfers across multiple accounts (current, savings, credit, ISA, Premium

@@ -1,4 +1,5 @@
 import { Bloom, Button, Tile } from "../components/ui";
+import { BrandTile } from "../components/BrandMark";
 
 // TODO: replace with your own donation link (Buy Me a Coffee, Ko-fi, GitHub
 // Sponsors, PayPal, etc.).
@@ -65,18 +66,10 @@ const HIGHLIGHTS = [
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div
-        className="flex h-[38px] w-[38px] items-center justify-center rounded-xl text-lg font-bold text-white"
-        style={{
-          background: "linear-gradient(140deg, #0a84ff, #30d5c8)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 16px -4px rgba(10,132,255,0.6)",
-        }}
-      >
-        £
-      </div>
+      <BrandTile />
       <div>
-        <div className="text-glass text-[15px] font-semibold tracking-tight">Finance</div>
-        <div className="text-glass-3 text-xs tracking-wide">Tracker</div>
+        <div className="text-glass text-[15px] font-semibold tracking-tight">SuperSaver</div>
+        <div className="text-glass-3 text-xs tracking-wide">Save smarter</div>
       </div>
     </div>
   );
@@ -179,7 +172,7 @@ export default function Landing({
             </a>
           </Tile>
           <p className="text-glass-3 mt-6 text-center text-xs">
-            Your data stays on your own server. © {new Date().getFullYear()} Finance Tracker.
+            Your data stays on your own server. © {new Date().getFullYear()} SuperSaver.
           </p>
         </section>
       </div>

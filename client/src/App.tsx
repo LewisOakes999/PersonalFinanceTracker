@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { useAuth } from "./lib/AuthContext";
+import { BrandTile } from "./components/BrandMark";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Analytics from "./pages/Analytics";
@@ -37,23 +38,6 @@ const ACTIVE_PILL: CSSProperties = {
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28), 0 6px 16px -8px rgba(10,132,255,0.6)",
 };
 
-function BrandTile({ size = 38 }: { size?: number }) {
-  return (
-    <div
-      className="flex items-center justify-center rounded-xl font-bold text-white"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size / 2.1,
-        background: "linear-gradient(140deg, #0a84ff, #30d5c8)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 16px -4px rgba(10,132,255,0.6)",
-      }}
-    >
-      £
-    </div>
-  );
-}
-
 function SidebarContent({
   tab,
   onNavigate,
@@ -71,8 +55,8 @@ function SidebarContent({
       <div className="flex items-center gap-3 border-b border-white/10 px-2 pb-4 pt-1.5">
         <BrandTile />
         <div>
-          <div className="text-glass text-[15px] font-semibold tracking-tight">Finance</div>
-          <div className="text-glass-3 text-xs tracking-wide">Tracker</div>
+          <div className="text-glass text-[15px] font-semibold tracking-tight">SuperSaver</div>
+          <div className="text-glass-3 text-xs tracking-wide">Save smarter</div>
         </div>
       </div>
 
@@ -150,7 +134,7 @@ export default function App() {
             ☰
           </button>
           <BrandTile size={32} />
-          <div className="text-glass text-sm font-semibold tracking-tight">Finance Tracker</div>
+          <div className="text-glass text-sm font-semibold tracking-tight">SuperSaver</div>
         </div>
 
         {/* Desktop sidebar (always visible ≥ md) */}
