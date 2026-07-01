@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useAuth } from "./lib/AuthContext";
 import { BrandTile } from "./components/BrandMark";
+import { SidebarTips } from "./components/SidebarTips";
+import { Onboarding } from "./components/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Analytics from "./pages/Analytics";
@@ -61,7 +63,7 @@ function SidebarContent({
       </div>
 
       {/* Nav */}
-      <nav className="flex flex-col gap-1 overflow-y-auto">
+      <nav className="flex flex-1 min-h-0 flex-col gap-1 overflow-y-auto">
         {TABS.map((t) => {
           const active = tab === t.id;
           return (
@@ -80,24 +82,27 @@ function SidebarContent({
         })}
       </nav>
 
-      {/* User chip */}
-      <div className="glass-nested mt-auto flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2.5">
-        <div
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-          style={{
-            background: "linear-gradient(140deg,#5e5ce6,#0a84ff)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
-          }}
-        >
-          {email?.[0]?.toUpperCase() ?? "?"}
-        </div>
-        <div className="min-w-0 flex-1 text-xs leading-tight">
-          <div className="text-glass truncate font-medium" title={email}>
-            {email ?? "Signed in"}
+      {/* Tips + user chip, pinned to the bottom */}
+      <div className="flex flex-col gap-[14px]">
+        <SidebarTips />
+        <div className="glass-nested flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2.5">
+          <div
+            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{
+              background: "linear-gradient(140deg,#5e5ce6,#0a84ff)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
+            }}
+          >
+            {email?.[0]?.toUpperCase() ?? "?"}
           </div>
-          <button onClick={onSignOut} className="text-glass-3 hover:text-glass transition-colors">
-            Sign out
-          </button>
+          <div className="min-w-0 flex-1 text-xs leading-tight">
+            <div className="text-glass truncate font-medium" title={email}>
+              {email ?? "Signed in"}
+            </div>
+            <button onClick={onSignOut} className="text-glass-3 hover:text-glass transition-colors">
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -107,11 +112,23 @@ function SidebarContent({
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const { user, logout } = useAuth();
 
   const go = (id: Tab) => {
     setTab(id);
     setNavOpen(false);
+  };
+
+  // Show the first-login walkthrough once per account (per browser).
+  const onboardKey = user ? `ss_onboarded_${user.email}` : null;
+  useEffect(() => {
+    if (onboardKey && !localStorage.getItem(onboardKey)) setShowOnboarding(true);
+  }, [onboardKey]);
+
+  const finishOnboarding = () => {
+    if (onboardKey) localStorage.setItem(onboardKey, "1");
+    setShowOnboarding(false);
   };
 
   return (
@@ -165,6 +182,16 @@ export default function App() {
           {tab === "settings" && <Settings />}
         </main>
       </div>
+
+      {showOnboarding && (
+        <Onboarding
+          onClose={finishOnboarding}
+          onAddAccount={() => {
+            finishOnboarding();
+            go("settings");
+          }}
+        />
+      )}
     </div>
   );
 }
