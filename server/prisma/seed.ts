@@ -79,6 +79,7 @@ async function main() {
   await prisma.goal.deleteMany({ where: { userId } });
   await prisma.category.deleteMany({ where: { userId } });
   await prisma.liability.deleteMany({ where: { userId } });
+  await prisma.asset.deleteMany({ where: { userId } });
   await prisma.account.deleteMany({ where: { userId } });
   await prisma.settings.deleteMany({ where: { userId } });
 
@@ -136,6 +137,14 @@ async function main() {
       { userId, name: "Home Mortgage", type: "mortgage", balance: 184500, interestRate: 4.29, monthlyPayment: 1150 },
       { userId, name: "Car Lease", type: "lease", balance: 9200, interestRate: 6.9, monthlyPayment: 289 },
       { userId, name: "Student Loan", type: "loan", balance: 21400, interestRate: 7.3, monthlyPayment: 95 },
+    ],
+  });
+
+  console.log("Creating other assets...");
+  await prisma.asset.createMany({
+    data: [
+      { userId, name: "Home", type: "property", value: 315000 },
+      { userId, name: "Car (VW Golf)", type: "vehicle", value: 14500 },
     ],
   });
 

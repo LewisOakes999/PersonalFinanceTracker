@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type {
   Account,
   AccountBalance,
+  Asset,
   Category,
   ExchangeRate,
   Liability,
@@ -128,10 +129,141 @@ export default function Settings() {
       <SecurityManager />
       <BackupManager />
       <AccountsManager accounts={accounts} onChange={loadAccounts} format={format} />
+      <AssetsManager />
       <LiabilitiesManager />
       <ValuationsManager accounts={accounts} format={format} />
       <CategoriesManager categories={categories} onChange={loadCategories} />
     </div>
+  );
+}
+
+const ASSET_TYPES = ["property", "vehicle", "valuables", "cash", "other"];
+
+/** Manage non-account assets (property, vehicles…) that count toward net worth. */
+function AssetsManager() {
+  const [items, setItems] = useState<Asset[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [type, setType] = useState("property");
+  const [currency, setCurrency] = useState("GBP");
+  const [value, setValue] = useState("");
+
+  const load = () => api.listAssets().then(setItems);
+  useEffect(() => {
+    load();
+  }, []);
+
+  const reset = () => {
+    setEditing(null);
+    setName("");
+    setType("property");
+    setCurrency("GBP");
+    setValue("");
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const data = { name: name.trim(), type, currency, value: Number(value) || 0 };
+    try {
+      if (editing) await api.updateAsset(editing, data);
+      else await api.createAsset(data);
+      reset();
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  const edit = (a: Asset) => {
+    setEditing(a.id);
+    setName(a.name);
+    setType(a.type);
+    setCurrency(a.currency);
+    setValue(String(a.value));
+  };
+
+  const remove = async (a: Asset) => {
+    if (!confirm(`Delete “${a.name}”?`)) return;
+    try {
+      await api.deleteAsset(a.id);
+      if (editing === a.id) reset();
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  return (
+    <CollapsibleSection title="Other Assets">
+      <p className="text-glass-3 mb-4 text-xs">
+        Property, vehicles, valuables and anything else you own that isn't a bank account. Their value
+        is added to your net worth.
+      </p>
+      {items.length > 0 ? (
+        <ul className="mb-4 divide-y divide-white/10">
+          {items.map((a) => (
+            <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div className="min-w-0">
+                <span className="text-glass font-medium">{a.name}</span>{" "}
+                <span className="text-glass-3 text-xs uppercase tracking-wide">{a.type}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="num text-glass-2 text-[13px]">{formatCurrency(a.value, a.currency)}</span>
+                <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => edit(a)}>
+                  edit
+                </button>
+                <button className="text-xs text-[#ff6b8a] hover:underline" onClick={() => remove(a)}>
+                  delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-glass-3 mb-4 text-sm">No other assets yet. Add one below.</p>
+      )}
+      <form onSubmit={submit} data-tour="add-asset" className="flex flex-wrap items-end gap-3">
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Home" />
+        </Field>
+        <Field label="Type">
+          <select value={type} onChange={(e) => setType(e.target.value)}>
+            {ASSET_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Currency">
+          <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Value">
+          <input
+            type="number"
+            step="0.01"
+            className="num w-32"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </Field>
+        <Button type="submit" variant="primary">
+          {editing ? "Update" : "Add"} Asset
+        </Button>
+        {editing && (
+          <Button type="button" onClick={reset}>
+            Cancel
+          </Button>
+        )}
+      </form>
+    </CollapsibleSection>
   );
 }
 

@@ -56,9 +56,10 @@ summaryRouter.get(
   "/balances",
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
-    const [accounts, liabilityRows] = await Promise.all([
+    const [accounts, liabilityRows, assetRows] = await Promise.all([
       prisma.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
       prisma.liability.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+      prisma.asset.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     ]);
     const [balanceMap, conv] = await Promise.all([accountBalances(userId), getConversion(userId)]);
 
@@ -95,14 +96,32 @@ summaryRouter.get(
       };
     });
 
-    const assets = round2(balances.reduce((sum, a) => sum + a.baseBalance, 0));
+    const otherAssets = assetRows.map((a) => {
+      const value = toNumber(a.value);
+      return {
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        currency: a.currency,
+        note: a.note,
+        value,
+        baseValue: round2(conv.toBase(value, a.currency)),
+      };
+    });
+
+    const accountsTotal = round2(balances.reduce((sum, a) => sum + a.baseBalance, 0));
+    const otherAssetsTotal = round2(otherAssets.reduce((sum, a) => sum + a.baseValue, 0));
+    const assets = round2(accountsTotal + otherAssetsTotal);
     const liabilitiesTotal = round2(liabilities.reduce((sum, l) => sum + l.baseBalance, 0));
     res.json({
       accounts: balances,
       liabilities,
-      // `overall` kept for backward compatibility (= total assets).
-      overall: assets,
-      assets,
+      otherAssets,
+      // `overall` kept for backward compatibility (= total account balances).
+      overall: accountsTotal,
+      accountsTotal,
+      otherAssetsTotal,
+      assets, // accounts + other assets
       liabilitiesTotal,
       netWorth: round2(assets - liabilitiesTotal),
       baseCurrency: conv.base,
@@ -214,11 +233,12 @@ summaryRouter.get(
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 60);
     const lookback = Math.min(Math.max(Number(req.query.lookback) || 6, 1), 24);
 
-    // Accounts and their current balances.
-    const accounts = await prisma.account.findMany({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-    });
+    // Accounts and their current balances, plus liabilities & other assets.
+    const [accounts, liabilityRows, assetRows] = await Promise.all([
+      prisma.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+      prisma.liability.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+      prisma.asset.findMany({ where: { userId } }),
+    ]);
     const balanceMap = await accountBalances(userId);
     const currentBalance = (id: string) => balanceMap.get(id) ?? 0;
 
@@ -256,6 +276,25 @@ summaryRouter.get(
     const monthlyRate = (annualPct: number) => Math.pow(1 + annualPct / 100, 1 / 12) - 1;
     const rateById = new Map(accounts.map((a) => [a.id, monthlyRate(toNumber(a.interestRate))]));
 
+    // Other assets are treated as constant over the horizon.
+    const otherAssetsTotal = Math.round(assetRows.reduce((s, a) => s + toNumber(a.value), 0) * 100) / 100;
+
+    // Project each liability's paydown: interest accrues, the monthly payment
+    // reduces the balance (floored at zero). Payments are assumed to be part of
+    // regular expenses, so account cash isn't reduced again here.
+    const liabState = liabilityRows.map((l) => ({
+      id: l.id,
+      name: l.name,
+      type: l.type,
+      startingBalance: Math.round(toNumber(l.balance) * 100) / 100,
+      balance: toNumber(l.balance),
+      rate: monthlyRate(toNumber(l.interestRate)),
+      payment: toNumber(l.monthlyPayment),
+      payoffMonth: null as number | null,
+    }));
+    const liabTotal = () => Math.round(liabState.reduce((s, l) => s + l.balance, 0) * 100) / 100;
+    const startingLiabilities = liabTotal();
+
     // Build future month labels (starting next month).
     const cursor = new Date();
     cursor.setUTCDate(1);
@@ -270,6 +309,8 @@ summaryRouter.get(
       taxFreeInterest: number;
       net: number;
       balance: number;
+      liabilities: number;
+      netWorth: number;
     }[] = [];
 
     for (let m = 1; m <= months; m++) {
@@ -290,6 +331,16 @@ summaryRouter.get(
       if (primaryId) balances.set(primaryId, (balances.get(primaryId) ?? 0) + surplus);
 
       const total = [...balances.values()].reduce((s, v) => s + v, 0);
+
+      // Step each liability's paydown for this month.
+      for (const l of liabState) {
+        if (l.balance <= 0) continue;
+        const next = l.balance * (1 + l.rate) - l.payment;
+        l.balance = next > 0 ? next : 0;
+        if (l.balance === 0 && l.payoffMonth === null) l.payoffMonth = m;
+      }
+      const liabilitiesRemaining = liabTotal();
+
       rows.push({
         month: label,
         income: monthlyIncome,
@@ -298,6 +349,8 @@ summaryRouter.get(
         taxFreeInterest: Math.round(taxFreeInterest * 100) / 100,
         net: Math.round((surplus + interest) * 100) / 100,
         balance: Math.round(total * 100) / 100,
+        liabilities: liabilitiesRemaining,
+        netWorth: Math.round((total + otherAssetsTotal - liabilitiesRemaining) * 100) / 100,
       });
     }
 
@@ -312,10 +365,19 @@ summaryRouter.get(
       { income: 0, expenses: 0, interest: 0, taxFreeInterest: 0, net: 0 }
     );
 
+    const endingBalance = rows.length ? rows[rows.length - 1].balance : startingBalance;
+    const endingLiabilities = rows.length ? rows[rows.length - 1].liabilities : startingLiabilities;
+    const round2f = (n: number) => Math.round(n * 100) / 100;
+
     res.json({
       assumptions: { monthlyIncome, monthlyExpenses, lookbackMonths: lookback, avgIncome, avgExpenses },
-      startingBalance: Math.round(startingBalance * 100) / 100,
-      endingBalance: rows.length ? rows[rows.length - 1].balance : startingBalance,
+      startingBalance: round2f(startingBalance),
+      endingBalance,
+      otherAssets: otherAssetsTotal,
+      startingLiabilities,
+      endingLiabilities,
+      startingNetWorth: round2f(startingBalance + otherAssetsTotal - startingLiabilities),
+      endingNetWorth: round2f(endingBalance + otherAssetsTotal - endingLiabilities),
       accounts: accounts.map((a) => ({
         id: a.id,
         name: a.name,
@@ -325,6 +387,14 @@ summaryRouter.get(
         interestRate: toNumber(a.interestRate),
         startingBalance: Math.round(currentBalance(a.id) * 100) / 100,
         projectedBalance: Math.round((balances.get(a.id) ?? 0) * 100) / 100,
+      })),
+      liabilities: liabState.map((l) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type,
+        startingBalance: l.startingBalance,
+        projectedBalance: round2f(l.balance),
+        payoffMonth: l.payoffMonth,
       })),
       months: rows,
       totals,
@@ -351,18 +421,25 @@ summaryRouter.get(
       labels.push(d.toISOString().slice(0, 7));
     }
 
-    const [accounts, liabilityRows, conv] = await Promise.all([
+    const [accounts, liabilityRows, assetRows, conv] = await Promise.all([
       prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
       prisma.liability.findMany({ where: { userId }, select: { balance: true, currency: true } }),
+      prisma.asset.findMany({ where: { userId }, select: { value: true, currency: true } }),
       getConversion(userId),
     ]);
     const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
-    // Liabilities have no history, so their current total is applied as a
-    // constant offset — this keeps the latest point consistent with net worth.
+    // Liabilities and other assets have no history, so their current totals are
+    // applied as a constant offset — this keeps the latest point consistent
+    // with the headline net worth figure.
     const liabilitiesTotal = liabilityRows.reduce(
       (sum, l) => sum + conv.toBase(toNumber(l.balance), l.currency),
       0
     );
+    const otherAssetsTotal = assetRows.reduce(
+      (sum, a) => sum + conv.toBase(toNumber(a.value), a.currency),
+      0
+    );
+    const offset = otherAssetsTotal - liabilitiesTotal;
 
     // Valuation- and currency-aware total net worth as of each month end.
     const result = [];
@@ -371,7 +448,7 @@ summaryRouter.get(
       const map = await accountBalances(userId, monthEnd);
       let total = 0;
       for (const [accId, bal] of map) total += conv.toBase(bal, currencyOf.get(accId) ?? conv.base);
-      result.push({ month: m, netWorth: Math.round((total - liabilitiesTotal) * 100) / 100 });
+      result.push({ month: m, netWorth: Math.round((total + offset) * 100) / 100 });
     }
     res.json(result);
   })

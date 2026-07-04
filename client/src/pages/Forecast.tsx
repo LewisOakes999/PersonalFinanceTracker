@@ -77,6 +77,10 @@ export default function Forecast() {
         )}`
       : "";
 
+  const showNetWorth = data.startingLiabilities > 0 || data.otherAssets > 0;
+  const payoffLabel = (monthIndex: number) =>
+    data.months[monthIndex - 1] ? formatMonthLabel(data.months[monthIndex - 1].month) : "";
+
   return (
     <div className="space-y-4">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -124,6 +128,14 @@ export default function Forecast() {
           tone={data.endingBalance >= 0 ? "income" : "expense"}
           sub={`from ${format(data.startingBalance)} today`}
         />
+        {(data.startingLiabilities > 0 || data.otherAssets > 0) && (
+          <StatTile
+            label="Projected Net Worth"
+            value={format(data.endingNetWorth)}
+            tone={data.endingNetWorth >= 0 ? "income" : "expense"}
+            sub={`from ${format(data.startingNetWorth)} today`}
+          />
+        )}
       </div>
 
       {/* Assumptions */}
@@ -189,7 +201,9 @@ export default function Forecast() {
 
       {/* Projected balance */}
       <Tile className="p-[22px]">
-        <SectionTitle>Projected Total Balance</SectionTitle>
+        <SectionTitle>
+          {showNetWorth ? "Projected Balance & Net Worth" : "Projected Total Balance"}
+        </SectionTitle>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
@@ -197,6 +211,10 @@ export default function Forecast() {
                 <linearGradient id="balanceFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={INTEREST} stopOpacity={0.5} />
                   <stop offset="100%" stopColor={INTEREST} stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={INCOME} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={INCOME} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
@@ -208,7 +226,8 @@ export default function Forecast() {
                 width={70}
                 tickFormatter={(v: number) => format(v).replace(/\.00$/, "")}
               />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => format(v)} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [format(v), n]} />
+              {showNetWorth && <Legend wrapperStyle={{ fontSize: 12 }} />}
               <Area
                 type="monotone"
                 dataKey="balance"
@@ -217,10 +236,55 @@ export default function Forecast() {
                 strokeWidth={2}
                 fill="url(#balanceFill)"
               />
+              {showNetWorth && (
+                <Area
+                  type="monotone"
+                  dataKey="netWorth"
+                  name="Net Worth"
+                  stroke={INCOME}
+                  strokeWidth={2}
+                  fill="url(#netWorthFill)"
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </Tile>
+
+      {/* Debt paydown */}
+      {(data.liabilities?.length ?? 0) > 0 && (
+        <Tile className="p-[22px]">
+          <SectionTitle>Debt Paydown</SectionTitle>
+          <p className="text-glass-3 mb-3 text-xs">
+            Projected from each debt's monthly payment and interest. Assumes payments continue as part
+            of your regular expenses.
+          </p>
+          <ul className="divide-y divide-white/10">
+            {data.liabilities.map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <span className="flex min-w-0 items-center gap-2 text-glass">
+                  <span className="truncate">{l.name}</span>
+                  <span className="text-glass-3 text-xs uppercase tracking-wide">{l.type}</span>
+                </span>
+                <span className="num shrink-0 text-glass-3">
+                  {format(l.startingBalance)} <span className="text-glass-3">→</span>{" "}
+                  <span
+                    className={l.projectedBalance === 0 ? "" : "text-glass"}
+                    style={l.projectedBalance === 0 ? { color: INCOME } : undefined}
+                  >
+                    {format(l.projectedBalance)}
+                  </span>
+                  {l.payoffMonth != null && (
+                    <span className="ml-2 text-xs" style={{ color: INCOME }}>
+                      cleared {payoffLabel(l.payoffMonth)}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Tile>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Monthly cashflow + interest */}
@@ -289,6 +353,7 @@ export default function Forecast() {
               <th className="px-4 py-3 text-right">Interest</th>
               <th className="px-4 py-3 text-right">Net</th>
               <th className="px-4 py-3 text-right">Balance</th>
+              {showNetWorth && <th className="px-4 py-3 text-right">Net Worth</th>}
             </tr>
           </thead>
           <tbody>
@@ -314,6 +379,9 @@ export default function Forecast() {
                   {format(Math.abs(m.net))}
                 </td>
                 <td className="num px-4 py-2 text-right text-glass">{format(m.balance)}</td>
+                {showNetWorth && (
+                  <td className="num px-4 py-2 text-right text-glass">{format(m.netWorth)}</td>
+                )}
               </tr>
             ))}
           </tbody>

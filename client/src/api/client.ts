@@ -1,5 +1,6 @@
 import type {
   Account,
+  Asset,
   Attachment,
   Balances,
   Budget,
@@ -215,6 +216,14 @@ export const api = {
   updateLiability: (id: string, data: Partial<Liability>) =>
     request<Liability>(`/liabilities/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteLiability: (id: string) => request<void>(`/liabilities/${id}`, { method: "DELETE" }),
+
+  // Other assets (property, vehicles…)
+  listAssets: () => request<Asset[]>("/assets"),
+  createAsset: (data: Partial<Asset>) =>
+    request<Asset>("/assets", { method: "POST", body: JSON.stringify(data) }),
+  updateAsset: (id: string, data: Partial<Asset>) =>
+    request<Asset>(`/assets/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteAsset: (id: string) => request<void>(`/assets/${id}`, { method: "DELETE" }),
 
   // Budgets
   listBudgets: (month: string) => request<Budget[]>(`/budgets?month=${month}`),

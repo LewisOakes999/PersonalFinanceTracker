@@ -85,6 +85,14 @@ const LIABILITY_ICONS: Record<string, LucideIcon> = {
   other: Wallet,
 };
 
+const ASSET_ICONS: Record<string, LucideIcon> = {
+  property: Home,
+  vehicle: Car,
+  cash: Banknote,
+  valuables: Wallet,
+  other: Wallet,
+};
+
 export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void }) {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
@@ -295,8 +303,57 @@ export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void 
         </div>
       </Tile>
 
+      {/* Other assets */}
+      {balances && (balances.otherAssets?.length ?? 0) > 0 && (
+        <Tile className="p-[22px]">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+              Other Assets
+            </h2>
+            {onAddAccount && (
+              <button
+                onClick={onAddAccount}
+                className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
+              >
+                + Add asset
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+            {balances.otherAssets.map((a) => {
+              const AssetIcon = ASSET_ICONS[a.type] ?? Wallet;
+              return (
+                <Tile key={a.id} nested rounded="rounded-tile" className="p-[18px]">
+                  <div className="flex items-center justify-between">
+                    <div className="truncate text-[14px] font-medium text-glass">{a.name}</div>
+                    <div
+                      className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-glass-2"
+                      style={{ background: tint(INCOME, 0.18) }}
+                    >
+                      <AssetIcon size={13} strokeWidth={1.75} />
+                    </div>
+                  </div>
+                  <div className="text-glass-3 mt-0.5 text-[11px] uppercase tracking-[0.06em]">
+                    {a.type}
+                  </div>
+                  <div
+                    className="num mt-3 text-[22px] font-semibold tracking-tight"
+                    style={{ color: "var(--lg-text)" }}
+                  >
+                    {formatCurrency(a.value, a.currency)}
+                  </div>
+                  {balances && a.currency !== balances.baseCurrency && (
+                    <div className="num text-glass-3 mt-0.5 text-[11px]">≈ {format(a.baseValue)}</div>
+                  )}
+                </Tile>
+              );
+            })}
+          </div>
+        </Tile>
+      )}
+
       {/* Liabilities */}
-      {balances && balances.liabilities.length > 0 && (
+      {balances && (balances.liabilities?.length ?? 0) > 0 && (
         <Tile className="p-[22px]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">

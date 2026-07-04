@@ -256,6 +256,17 @@ export interface ForecastMonth {
   taxFreeInterest: number;
   net: number;
   balance: number;
+  liabilities: number; // total owed remaining that month
+  netWorth: number; // balance + other assets − liabilities
+}
+
+export interface ForecastLiability {
+  id: string;
+  name: string;
+  type: string;
+  startingBalance: number;
+  projectedBalance: number;
+  payoffMonth: number | null; // month index it clears, or null if still owing
 }
 
 export interface ForecastAccount {
@@ -279,7 +290,13 @@ export interface Forecast {
   };
   startingBalance: number;
   endingBalance: number;
+  otherAssets: number;
+  startingLiabilities: number;
+  endingLiabilities: number;
+  startingNetWorth: number;
+  endingNetWorth: number;
   accounts: ForecastAccount[];
+  liabilities: ForecastLiability[];
   months: ForecastMonth[];
   totals: { income: number; expenses: number; interest: number; taxFreeInterest: number; net: number };
 }
@@ -300,11 +317,28 @@ export interface LiabilityBalance extends Liability {
   baseBalance: number; // owed, in the base currency
 }
 
+export interface Asset {
+  id: string;
+  name: string;
+  type: string; // property | vehicle | valuables | cash | other
+  currency: string;
+  value: number;
+  note: string | null;
+  createdAt?: string;
+}
+
+export interface AssetBalance extends Asset {
+  baseValue: number; // worth, in the base currency
+}
+
 export interface Balances {
   accounts: AccountBalance[];
   liabilities: LiabilityBalance[];
-  overall: number; // total assets, in the base currency (kept for compatibility)
-  assets: number; // total account balances, in the base currency
+  otherAssets: AssetBalance[];
+  overall: number; // total account balances, in the base currency (kept for compatibility)
+  accountsTotal: number; // total account balances, in the base currency
+  otherAssetsTotal: number; // total other-asset value, in the base currency
+  assets: number; // accounts + other assets, in the base currency
   liabilitiesTotal: number; // total owed, in the base currency
   netWorth: number; // assets − liabilities
   baseCurrency: string;

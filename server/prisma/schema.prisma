@@ -32,7 +32,22 @@ model User {
   exchangeRates ExchangeRate[]
   attachments  Attachment[]
   liabilities  Liability[]
+  assets       Asset[]
   settings     Settings?
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      String // property | vehicle | valuables | cash | other
+  currency  String   @default("GBP")
+  value     Decimal  @default(0) @db.Decimal(14, 2) // current worth
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Liability {
