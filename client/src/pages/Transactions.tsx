@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import { ArrowLeftRight, ChevronDown, ChevronUp, Plus, Repeat, Split, X } from "lucide-react";
 import { api } from "../api/client";
 import type {
   Account,
@@ -108,7 +109,13 @@ export default function Transactions() {
   };
 
   const sortArrow = (field: SortField) =>
-    sort === field ? (order === "asc" ? " ▲" : " ▼") : "";
+    sort === field ? (
+      order === "asc" ? (
+        <ChevronUp size={12} className="ml-0.5 inline align-[-1px]" />
+      ) : (
+        <ChevronDown size={12} className="ml-0.5 inline align-[-1px]" />
+      )
+    ) : null;
 
   const onDeleteTxn = async (id: string) => {
     if (!confirm("Delete this transaction?")) return;
@@ -133,10 +140,19 @@ export default function Transactions() {
           <Button onClick={() => api.exportCsv().catch((e) => toast.error((e as Error).message))}>
             Export CSV
           </Button>
-          <Button onClick={() => setShowRecurring(true)}>↻ Recurring</Button>
-          <Button onClick={() => setEditingTransfer("new")}>⇄ Transfer</Button>
-          <Button variant="primary" data-tour="add-transaction" onClick={() => setEditing("new")}>
-            + Add Transaction
+          <Button className="inline-flex items-center gap-1.5" onClick={() => setShowRecurring(true)}>
+            <Repeat size={13} strokeWidth={2} /> Recurring
+          </Button>
+          <Button className="inline-flex items-center gap-1.5" onClick={() => setEditingTransfer("new")}>
+            <ArrowLeftRight size={13} strokeWidth={2} /> Transfer
+          </Button>
+          <Button
+            variant="primary"
+            className="inline-flex items-center gap-1.5"
+            data-tour="add-transaction"
+            onClick={() => setEditing("new")}
+          >
+            <Plus size={14} strokeWidth={2} /> Add Transaction
           </Button>
         </div>
       </header>
@@ -200,8 +216,8 @@ export default function Transactions() {
                   </td>
                   <td className="px-4 py-2 text-glass">
                     {row.t.recurringId && (
-                      <span className="mr-1 text-[#64d2ff]" title="From a recurring rule">
-                        ↻
+                      <span className="text-balance mr-1 inline-block align-[-2px]" title="From a recurring rule">
+                        <Repeat size={12} strokeWidth={2} />
                       </span>
                     )}
                     {row.t.description || <span className="text-glass-3">—</span>}
@@ -215,17 +231,16 @@ export default function Transactions() {
                           .map((s) => `${s.category.name}: ${s.amount}`)
                           .join(", ")}
                       >
-                        <span className="mr-1 text-[#64d2ff]">⑂</span>
+                        <span className="text-balance mr-1 inline-block align-[-2px]">
+                          <Split size={12} strokeWidth={2} />
+                        </span>
                         Split · {row.t.splits.length} categories
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-2 text-glass">
                         <span
                           className="inline-block h-2.5 w-2.5 rounded-[3px]"
-                          style={{
-                            backgroundColor: row.t.category.color,
-                            boxShadow: `0 0 8px ${row.t.category.color}`,
-                          }}
+                          style={{ backgroundColor: row.t.category.color }}
                         />
                         {row.t.category.name}
                       </span>
@@ -262,7 +277,7 @@ export default function Transactions() {
                   </td>
                   <td className="px-4 py-2 text-glass">
                     <span className="inline-flex items-center gap-2">
-                      <span style={{ color: SKY }}>⇄</span> Transfer
+                      <ArrowLeftRight size={13} strokeWidth={2} style={{ color: SKY }} /> Transfer
                     </span>
                     {row.t.note && <span className="ml-2 text-xs text-glass-3">({row.t.note})</span>}
                   </td>
@@ -636,7 +651,7 @@ function TransactionForm({
                     onClick={() => setSplits(splits.filter((_, j) => j !== i))}
                     aria-label="Remove line"
                   >
-                    ✕
+                    <X size={14} strokeWidth={2} />
                   </button>
                 )}
               </div>
@@ -1008,7 +1023,9 @@ function RecurringManager({
                 <li key={r.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <div className="min-w-0">
                     <div className="truncate text-glass">
-                      <span className="mr-1 text-[#64d2ff]">⇄</span>
+                      <span className="text-balance mr-1 inline-block align-[-2px]">
+                        <ArrowLeftRight size={12} strokeWidth={2} />
+                      </span>
                       {r.fromAccount.name} → {r.toAccount.name}
                     </div>
                     <div className="text-glass-3 text-xs capitalize">

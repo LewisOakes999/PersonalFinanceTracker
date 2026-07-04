@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { Button } from "./ui";
 import { BrandTile } from "./BrandMark";
 
@@ -155,10 +156,10 @@ export function Onboarding({
         <div className="glass relative rounded-panel p-5">
           <button
             onClick={onFinish}
-            className="text-glass-3 hover:text-glass absolute right-4 top-4 text-[13px]"
+            className="text-glass-3 hover:text-glass absolute right-4 top-4 inline-flex items-center gap-1 text-[13px]"
             aria-label="Skip tour"
           >
-            Skip ✕
+            Skip <X size={13} strokeWidth={2} />
           </button>
 
           {first && <BrandTile size={40} />}
@@ -172,7 +173,7 @@ export function Onboarding({
               <span
                 key={i}
                 className={`h-1.5 rounded-full transition-all ${
-                  i === step ? "w-5 bg-[#64d2ff]" : "w-1.5 bg-white/20"
+                  i === step ? "w-5 bg-balance" : "w-1.5 bg-white/20"
                 }`}
               />
             ))}

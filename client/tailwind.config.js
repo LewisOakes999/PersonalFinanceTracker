@@ -4,14 +4,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Liquid Glass semantic accents (see design_handoff_liquid_glass).
-        accent: "#0a84ff",
-        income: "#34e0c4",
-        expense: "#ff6b8a",
-        balance: "#64d2ff",
-        "lg-teal": "#30d5c8",
-        "lg-indigo": "#5e5ce6",
-        "lg-violet": "#bf5af2",
+        // Liquid Glass semantic accents — the entire chromatic palette.
+        // One brand accent + three status colours; nothing else gets a hue.
+        accent: "#0a84ff", // brand blue: primary actions, focus, neutral progress
+        balance: "#64d2ff", // readable tint of accent: links, chart lines on dark
+        income: "#34e0c4", // positive money movement
+        expense: "#ff6b8a", // negative money movement / over budget
+        warn: "#ffd60a", // approaching a limit
+      },
+      backgroundImage: {
+        // The single sanctioned gradient, reserved for the brand tile.
+        brand: "linear-gradient(140deg, #0a84ff, #30d5c8)",
       },
       borderRadius: {
         glass: "20px",

@@ -160,11 +160,7 @@ function BudgetRow({
 
   const pct = budget.amount > 0 ? (budget.spent / budget.amount) * 100 : 0;
   const over = budget.spent > budget.amount;
-  const fill = over
-    ? "linear-gradient(90deg,#ff6b8a,#ff8fa3)"
-    : pct > 80
-      ? "linear-gradient(90deg,#ffd60a,#ffb340)"
-      : "linear-gradient(90deg,#0a84ff,#30d5c8)";
+  const fill = over ? "bg-expense" : pct > 80 ? "bg-warn" : "bg-accent";
 
   return (
     <div>
@@ -172,7 +168,7 @@ function BudgetRow({
         <span className="flex items-center gap-2 text-glass">
           <span
             className="inline-block h-[10px] w-[10px] rounded-[3px]"
-            style={{ background: budget.category.color, boxShadow: `0 0 8px ${budget.category.color}` }}
+            style={{ background: budget.category.color }}
           />
           {budget.category.name}
         </span>
@@ -201,8 +197,8 @@ function BudgetRow({
       {/* Rounded progress bar */}
       <div className="glass-nested h-2.5 w-full overflow-hidden rounded-full">
         <div
-          className="h-full rounded-full transition-[width]"
-          style={{ width: `${Math.min(pct, 100)}%`, background: fill }}
+          className={`h-full rounded-full transition-[width] ${fill}`}
+          style={{ width: `${Math.min(pct, 100)}%` }}
         />
       </div>
       <div className="num text-glass-3 mt-1 text-xs">

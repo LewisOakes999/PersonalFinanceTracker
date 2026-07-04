@@ -1,3 +1,4 @@
+import { Check, Circle } from "lucide-react";
 import { checkPassword, passwordStrength, type StrengthLevel } from "../lib/password";
 
 const META: Record<StrengthLevel, { label: string; color: string; bars: number }> = {
@@ -8,8 +9,11 @@ const META: Record<StrengthLevel, { label: string; color: string; bars: number }
 
 function Req({ ok, children }: { ok: boolean; children: string }) {
   return (
-    <span style={{ color: ok ? "#34e0c4" : undefined }} className={ok ? "" : "text-glass-3"}>
-      {ok ? "✓" : "○"} {children}
+    <span
+      style={{ color: ok ? "#34e0c4" : undefined }}
+      className={`inline-flex items-center gap-1 ${ok ? "" : "text-glass-3"}`}
+    >
+      {ok ? <Check size={11} strokeWidth={2.5} /> : <Circle size={9} strokeWidth={2} />} {children}
     </span>
   );
 }

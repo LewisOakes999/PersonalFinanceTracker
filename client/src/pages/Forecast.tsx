@@ -102,18 +102,16 @@ export default function Forecast() {
 
       {/* Totals over the horizon */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-4">
-        <StatTile label="Projected Income" value={format(data.totals.income)} tone="income" icon="↑" />
+        <StatTile label="Projected Income" value={format(data.totals.income)} tone="income" />
         <StatTile
           label="Projected Expenses"
           value={format(data.totals.expenses)}
           tone="expense"
-          icon="↓"
         />
         <StatTile
           label="Projected Interest"
           value={format(data.totals.interest)}
           tone="accent"
-          icon="%"
           sub={
             data.totals.taxFreeInterest > 0
               ? `${format(data.totals.taxFreeInterest)} tax-free (ISA/PB)`
@@ -124,7 +122,6 @@ export default function Forecast() {
           label="Ending Balance"
           value={format(data.endingBalance)}
           tone={data.endingBalance >= 0 ? "income" : "expense"}
-          icon="◈"
           sub={`from ${format(data.startingBalance)} today`}
         />
       </div>
@@ -175,14 +172,8 @@ export default function Forecast() {
           </div>
           <div className="glass-nested h-2.5 w-full overflow-hidden rounded-full">
             <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.min((isa.used / isa.allowance) * 100, 100)}%`,
-                background:
-                  isa.used > isa.allowance
-                    ? "linear-gradient(90deg,#ff6b8a,#ff8fa3)"
-                    : "linear-gradient(90deg,#34e0c4,#64d2ff)",
-              }}
+              className={`h-full rounded-full ${isa.used > isa.allowance ? "bg-expense" : "bg-income"}`}
+              style={{ width: `${Math.min((isa.used / isa.allowance) * 100, 100)}%` }}
             />
           </div>
           <p className="text-glass-3 mt-2 text-xs">

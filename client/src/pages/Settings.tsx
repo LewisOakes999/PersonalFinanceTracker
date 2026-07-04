@@ -982,7 +982,7 @@ function CategoryList({
             <span className="flex min-w-0 items-center gap-2 text-glass">
               <span
                 className="inline-block h-[11px] w-[11px] shrink-0 rounded-[3px]"
-                style={{ backgroundColor: c.color, boxShadow: `0 0 8px ${c.color}` }}
+                style={{ backgroundColor: c.color }}
               />
               <span className="truncate">{c.name}</span>
             </span>

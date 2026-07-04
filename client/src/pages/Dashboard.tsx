@@ -1,5 +1,25 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import {
+  ArrowUpRight,
+  Banknote,
+  Briefcase,
+  Clapperboard,
+  CreditCard,
+  Fuel,
+  HeartPulse,
+  Home,
+  Percent,
+  PiggyBank,
+  ShoppingBag,
+  ShoppingCart,
+  Tag,
+  TrendingUp,
+  UtensilsCrossed,
+  Wallet,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { api } from "../api/client";
 import type { Balances, CategoryTotal, Totals, Transaction } from "../types";
@@ -28,32 +48,32 @@ function tint(hex: string, alpha = 0.15): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  groceries: "🛒",
-  "dining out": "🍽",
-  dining: "🍽",
-  transport: "⛽",
-  entertainment: "▶",
-  utilities: "⚡",
-  rent: "🏠",
-  housing: "🏠",
-  shopping: "🛍",
-  health: "⚕",
-  salary: "↑",
-  freelance: "💼",
-  interest: "💰",
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  groceries: ShoppingCart,
+  "dining out": UtensilsCrossed,
+  dining: UtensilsCrossed,
+  transport: Fuel,
+  entertainment: Clapperboard,
+  utilities: Zap,
+  rent: Home,
+  housing: Home,
+  shopping: ShoppingBag,
+  health: HeartPulse,
+  salary: ArrowUpRight,
+  freelance: Briefcase,
+  interest: Percent,
 };
 
-function txnIcon(t: Transaction): string {
-  return CATEGORY_ICONS[t.category.name.toLowerCase()] ?? (t.type === "income" ? "↑" : "•");
+function txnIcon(t: Transaction): LucideIcon {
+  return CATEGORY_ICONS[t.category.name.toLowerCase()] ?? (t.type === "income" ? ArrowUpRight : Tag);
 }
 
-const ACCOUNT_ICONS: Record<string, string> = {
-  credit: "💳",
-  savings: "🏦",
-  current: "💳",
-  cash: "💵",
-  investment: "📈",
+const ACCOUNT_ICONS: Record<string, LucideIcon> = {
+  credit: CreditCard,
+  savings: PiggyBank,
+  current: CreditCard,
+  cash: Banknote,
+  investment: TrendingUp,
 };
 
 export default function Dashboard() {
@@ -91,21 +111,19 @@ export default function Dashboard() {
 
       {/* Summary tiles */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-4">
-        <StatTile label="Income" value={format(totals?.income ?? 0)} tone="income" sub={periodSub} icon="↑" />
-        <StatTile label="Expenses" value={format(totals?.expenses ?? 0)} tone="expense" sub={periodSub} icon="↓" />
+        <StatTile label="Income" value={format(totals?.income ?? 0)} tone="income" sub={periodSub} />
+        <StatTile label="Expenses" value={format(totals?.expenses ?? 0)} tone="expense" sub={periodSub} />
         <StatTile
           label="Net"
           value={`${net >= 0 ? "+" : "−"}${format(Math.abs(net))}`}
           tone={net >= 0 ? "income" : "expense"}
           sub="income − expenses"
-          icon="≈"
         />
         <StatTile
           label="Balance"
           value={format(balances?.overall ?? 0)}
           tone="accent"
           sub={`${balances?.accounts.length ?? 0} accounts`}
-          icon="◈"
         />
       </div>
 
@@ -150,7 +168,7 @@ export default function Dashboard() {
                     <span className="flex min-w-0 items-center gap-2.5 text-glass">
                       <span
                         className="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]"
-                        style={{ background: c.color, boxShadow: `0 0 8px ${c.color}` }}
+                        style={{ background: c.color }}
                       />
                       <span className="truncate">{c.category}</span>
                     </span>
@@ -169,17 +187,19 @@ export default function Dashboard() {
             <Empty>No transactions this month.</Empty>
           ) : (
             <ul>
-              {recent.map((t) => (
+              {recent.map((t) => {
+                const Icon = txnIcon(t);
+                return (
                 <li
                   key={t.id}
                   className="flex items-center justify-between border-b border-white/[0.06] py-[11px] last:border-0"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div
-                      className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[11px] border border-white/10 text-[15px]"
+                      className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[11px] border border-white/10 text-glass-2"
                       style={{ background: tint(t.category.color) }}
                     >
-                      {txnIcon(t)}
+                      <Icon size={15} strokeWidth={1.75} />
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-[13.5px] font-medium text-glass">
@@ -198,7 +218,8 @@ export default function Dashboard() {
                     {format(t.amount)}
                   </span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </Tile>
@@ -208,7 +229,9 @@ export default function Dashboard() {
       <Tile className="p-[22px]">
         <SectionTitle>Balances by Account</SectionTitle>
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-          {balances?.accounts.map((a) => (
+          {balances?.accounts.map((a) => {
+            const AccountIcon = ACCOUNT_ICONS[a.type] ?? Wallet;
+            return (
             <Tile key={a.id} nested rounded="rounded-tile" className="p-[18px]">
               <div className="flex items-center justify-between">
                 <div className="flex min-w-0 items-center gap-2">
@@ -219,10 +242,10 @@ export default function Dashboard() {
                   {a.isPension && <PensionBadge />}
                 </div>
                 <div
-                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-[13px]"
+                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-glass-2"
                   style={{ background: tint("#0a84ff", 0.18) }}
                 >
-                  {ACCOUNT_ICONS[a.type] ?? "◈"}
+                  <AccountIcon size={13} strokeWidth={1.75} />
                 </div>
               </div>
               <div className="text-glass-3 mt-0.5 text-[11px] uppercase tracking-[0.06em]">
@@ -242,7 +265,8 @@ export default function Dashboard() {
                 </div>
               )}
             </Tile>
-          ))}
+            );
+          })}
         </div>
       </Tile>
     </div>

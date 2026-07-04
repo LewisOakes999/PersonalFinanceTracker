@@ -75,30 +75,26 @@ export default function Tax() {
         <>
           {/* Headline figures */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
-            <StatTile label="Total Income" value={format(data.income.total)} tone="income" icon="↑" />
+            <StatTile label="Total Income" value={format(data.income.total)} tone="income" />
             <StatTile
               label="Taxable Interest"
               value={format(data.interest.taxable)}
               tone="accent"
-              icon="%"
             />
             <StatTile
               label="Taxable Dividends"
               value={format(data.dividends.taxable)}
               tone="accent"
-              icon="◈"
             />
             <StatTile
               label="Pension Paid In"
               value={format(data.pension.contributions)}
               tone="default"
-              icon="↓"
             />
             <StatTile
               label="Est. Income Tax"
               value={format(data.estimate.total)}
               tone="expense"
-              icon="£"
               sub={`~${data.estimate.effectiveRate}% effective · rough estimate`}
             />
           </div>

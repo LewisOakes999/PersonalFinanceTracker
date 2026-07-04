@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import {
+  ArrowLeftRight,
+  ChartPie,
+  LayoutDashboard,
+  Menu,
+  ReceiptText,
+  Settings as SettingsIcon,
+  Target,
+  TrendingUp,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { useAuth } from "./lib/AuthContext";
 import { BrandTile } from "./components/BrandMark";
 import { SidebarTips } from "./components/SidebarTips";
@@ -23,21 +35,21 @@ type Tab =
   | "tax"
   | "settings";
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "◧" },
-  { id: "transactions", label: "Transactions", icon: "⇅" },
-  { id: "analytics", label: "Analytics", icon: "◔" },
-  { id: "budgets", label: "Budgets", icon: "◫" },
-  { id: "goals", label: "Goals", icon: "⌖" },
-  { id: "forecast", label: "Forecast", icon: "↗" },
-  { id: "tax", label: "Tax", icon: "▤" },
-  { id: "settings", label: "Settings", icon: "⚙" },
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "transactions", label: "Transactions", icon: ArrowLeftRight },
+  { id: "analytics", label: "Analytics", icon: ChartPie },
+  { id: "budgets", label: "Budgets", icon: Wallet },
+  { id: "goals", label: "Goals", icon: Target },
+  { id: "forecast", label: "Forecast", icon: TrendingUp },
+  { id: "tax", label: "Tax", icon: ReceiptText },
+  { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 const ACTIVE_PILL: CSSProperties = {
-  background: "linear-gradient(135deg, rgba(10,132,255,0.32), rgba(48,213,200,0.20))",
-  border: "1px solid rgba(255,255,255,0.16)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28), 0 6px 16px -8px rgba(10,132,255,0.6)",
+  background: "rgba(10,132,255,0.22)",
+  border: "1px solid rgba(10,132,255,0.4)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
 };
 
 function SidebarContent({
@@ -75,7 +87,7 @@ function SidebarContent({
                 active ? "font-[550] text-white" : "text-glass-2 hover:bg-white/5 hover:text-glass"
               }`}
             >
-              <span className="inline-flex w-5 justify-center opacity-90">{t.icon}</span>
+              <t.icon size={16} strokeWidth={1.75} className="w-5 shrink-0 opacity-90" />
               <span>{t.label}</span>
             </button>
           );
@@ -89,8 +101,8 @@ function SidebarContent({
           <div
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
             style={{
-              background: "linear-gradient(140deg,#5e5ce6,#0a84ff)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
+              background: "rgba(10,132,255,0.35)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25)",
             }}
           >
             {email?.[0]?.toUpperCase() ?? "?"}
@@ -146,9 +158,9 @@ export default function App() {
           <button
             onClick={() => setNavOpen(true)}
             aria-label="Open menu"
-            className="glass flex h-10 w-10 items-center justify-center rounded-xl text-lg text-glass"
+            className="glass flex h-10 w-10 items-center justify-center rounded-xl text-glass"
           >
-            ☰
+            <Menu size={18} strokeWidth={1.75} />
           </button>
           <BrandTile size={32} />
           <div className="text-glass text-sm font-semibold tracking-tight">SuperSaver</div>

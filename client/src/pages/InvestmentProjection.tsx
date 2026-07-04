@@ -20,7 +20,7 @@ import { useCurrency } from "../lib/CurrencyContext";
 import { tooltipStyle } from "./Dashboard";
 
 const MEDIAN = "#64d2ff";
-const BAND = "#7d7aff";
+const BAND = "#0a84ff";
 const INVESTED = "rgba(245,245,247,0.55)";
 const AXIS = "rgba(245,245,247,0.45)";
 const YEARS = [5, 10, 20, 30];
@@ -166,7 +166,6 @@ export default function InvestmentProjection() {
             label={`Median in ${years}y`}
             value={format(deflate(s.finalP50, years * 12))}
             tone="accent"
-            icon="◈"
             sub={`${format(deflate(s.finalP10, years * 12))} – ${format(
               deflate(s.finalP90, years * 12)
             )} (p10–p90)`}
@@ -174,7 +173,6 @@ export default function InvestmentProjection() {
           <StatTile
             label="Total Invested"
             value={format(deflate(s.invested, years * 12))}
-            icon="↓"
             sub={realTerms ? "cost basis · today's money" : "cost basis"}
           />
           <StatTile
@@ -183,13 +181,11 @@ export default function InvestmentProjection() {
               Math.abs(deflate(s.medianProfit, years * 12))
             )}`}
             tone={s.medianProfit >= 0 ? "income" : "expense"}
-            icon="≈"
           />
           <StatTile
             label={data?.target ? `Chance of ${format(data.target)}` : "Chance of Profit"}
             value={`${Math.round((data?.target ? s.probTarget ?? 0 : s.probProfit) * 100)}%`}
             tone="default"
-            icon="%"
             sub={data?.target ? `${Math.round(s.probProfit * 100)}% chance of any profit` : undefined}
           />
         </div>

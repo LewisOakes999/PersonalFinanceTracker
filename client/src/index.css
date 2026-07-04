@@ -151,7 +151,7 @@
     right: 2%;
     width: 50vw;
     height: 50vw;
-    background: radial-gradient(circle, #30d5c8 0%, transparent 70%);
+    background: radial-gradient(circle, #34e0c4 0%, transparent 70%);
     filter: blur(100px);
     opacity: calc(var(--lg-bloom) * 0.85);
     animation: drift2 28s ease-in-out infinite;
@@ -161,7 +161,7 @@
     right: 28%;
     width: 34vw;
     height: 34vw;
-    background: radial-gradient(circle, #5e5ce6 0%, transparent 70%);
+    background: radial-gradient(circle, var(--lg-accent) 0%, transparent 70%);
     filter: blur(110px);
     opacity: calc(var(--lg-bloom) * 0.7);
     animation: drift3 25s ease-in-out infinite;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { Check, Plus } from "lucide-react";
 import { api } from "../api/client";
 import type { Account, Goal } from "../types";
 import { Button, Field, Modal, StatTile, Tile } from "../components/ui";
@@ -36,20 +37,15 @@ export default function Goals() {
           <h1 className="text-[26px] font-semibold tracking-tight text-glass">Goals</h1>
           <p className="text-glass-3 mt-1 text-[13px]">Savings targets and progress</p>
         </div>
-        <Button variant="primary" onClick={() => setEditing("new")}>
-          + Add Goal
+        <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditing("new")}>
+          <Plus size={14} strokeWidth={2} /> Add Goal
         </Button>
       </header>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-4">
-        <StatTile label="Total Saved" value={format(totalSaved)} tone="income" icon="◈" />
-        <StatTile label="Total Target" value={format(totalTarget)} tone="accent" icon="⌖" />
-        <StatTile
-          label="Goals Reached"
-          value={`${reached} / ${goals.length}`}
-          tone="default"
-          icon="✓"
-        />
+        <StatTile label="Total Saved" value={format(totalSaved)} tone="income" />
+        <StatTile label="Total Target" value={format(totalTarget)} tone="accent" />
+        <StatTile label="Goals Reached" value={`${reached} / ${goals.length}`} tone="default" />
       </div>
 
       {goals.length === 0 ? (
@@ -98,9 +94,6 @@ function GoalCard({
 }) {
   const pct = Math.min(goal.progress * 100, 100);
   const done = goal.progress >= 1;
-  const fill = done
-    ? "linear-gradient(90deg,#34e0c4,#30d5c8)"
-    : "linear-gradient(90deg,#0a84ff,#64d2ff)";
 
   return (
     <Tile className="p-[22px]">
@@ -113,10 +106,10 @@ function GoalCard({
           </div>
         </div>
         <div className="flex gap-2 text-xs">
-          <button className="text-[#64d2ff] hover:underline" onClick={onEdit}>
+          <button className="text-balance hover:underline" onClick={onEdit}>
             edit
           </button>
-          <button className="text-[#ff6b8a] hover:underline" onClick={onRemove}>
+          <button className="text-expense hover:underline" onClick={onRemove}>
             remove
           </button>
         </div>
@@ -130,12 +123,19 @@ function GoalCard({
       </div>
 
       <div className="glass-nested mt-2 h-2.5 w-full overflow-hidden rounded-full">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: fill }} />
+        <div
+          className={`h-full rounded-full ${done ? "bg-income" : "bg-accent"}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
       <div className="num mt-1 flex justify-between text-xs text-glass-3">
-        <span style={done ? { color: "#34e0c4" } : undefined}>
-          {done ? "Reached 🎉" : `${pct.toFixed(0)}%`}
-        </span>
+        {done ? (
+          <span className="text-income inline-flex items-center gap-1">
+            <Check size={12} strokeWidth={2.5} /> Reached
+          </span>
+        ) : (
+          <span>{pct.toFixed(0)}%</span>
+        )}
         <span>{done ? "" : `${format(goal.remaining)} to go`}</span>
       </div>
     </Tile>

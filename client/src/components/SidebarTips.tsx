@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Lightbulb } from "lucide-react";
 import { api } from "../api/client";
 import { useCurrency } from "../lib/CurrencyContext";
 import { currentMonth } from "../lib/format";
@@ -124,21 +125,23 @@ export function SidebarTips() {
       onMouseLeave={() => (paused.current = false)}
     >
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-glass-3 text-[10px] font-semibold uppercase tracking-wider">💡 Tip</span>
+        <span className="text-glass-3 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider">
+          <Lightbulb size={11} strokeWidth={2} /> Tip
+        </span>
         <div className="flex items-center gap-0.5">
           <button
             onClick={() => go(i - 1)}
             aria-label="Previous tip"
-            className="text-glass-3 hover:text-glass flex h-5 w-5 items-center justify-center rounded-md text-base leading-none hover:bg-white/10"
+            className="text-glass-3 hover:text-glass flex h-5 w-5 items-center justify-center rounded-md hover:bg-white/10"
           >
-            ‹
+            <ChevronLeft size={13} strokeWidth={2} />
           </button>
           <button
             onClick={() => go(i + 1)}
             aria-label="Next tip"
-            className="text-glass-3 hover:text-glass flex h-5 w-5 items-center justify-center rounded-md text-base leading-none hover:bg-white/10"
+            className="text-glass-3 hover:text-glass flex h-5 w-5 items-center justify-center rounded-md hover:bg-white/10"
           >
-            ›
+            <ChevronRight size={13} strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -158,7 +161,7 @@ export function SidebarTips() {
         {tips.map((_, idx) => (
           <span
             key={idx}
-            className={`h-1 w-1 rounded-full ${idx === i ? "bg-[#64d2ff]" : "bg-white/20"}`}
+            className={`h-1 w-1 rounded-full ${idx === i ? "bg-balance" : "bg-white/20"}`}
           />
         ))}
       </div>

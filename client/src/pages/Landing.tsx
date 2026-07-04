@@ -1,3 +1,15 @@
+import {
+  ArrowLeftRight,
+  ChartPie,
+  Heart,
+  LayoutDashboard,
+  ReceiptText,
+  Settings,
+  Target,
+  TrendingUp,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { Bloom, Button, Tile } from "../components/ui";
 import { BrandTile } from "../components/BrandMark";
 
@@ -5,49 +17,49 @@ import { BrandTile } from "../components/BrandMark";
 // Sponsors, PayPal, etc.).
 const DONATE_URL = "https://www.buymeacoffee.com/";
 
-const MODULES: { icon: string; title: string; blurb: string }[] = [
+const MODULES: { icon: LucideIcon; title: string; blurb: string }[] = [
   {
-    icon: "◧",
+    icon: LayoutDashboard,
     title: "Dashboard",
     blurb:
       "Your money at a glance — income, expenses, net and per-account balances for any month, year or tax year.",
   },
   {
-    icon: "⇅",
+    icon: ArrowLeftRight,
     title: "Transactions",
     blurb:
       "Add, search and filter, import & export CSV, split one purchase across categories, and attach receipts.",
   },
   {
-    icon: "◔",
+    icon: ChartPie,
     title: "Analytics",
     blurb:
       "Net worth over time, income-vs-expenses trends and a spending-by-category breakdown with drill-down.",
   },
   {
-    icon: "◫",
+    icon: Wallet,
     title: "Budgets",
     blurb: "Set a monthly limit per category and track spending against it with clear progress bars.",
   },
   {
-    icon: "⌖",
+    icon: Target,
     title: "Goals",
     blurb: "Savings targets, tracked manually or linked to an account's live balance.",
   },
   {
-    icon: "↗",
+    icon: TrendingUp,
     title: "Forecast",
     blurb:
       "Project future cash flow, and run a Monte Carlo confidence cone for investments — in today's money if you like.",
   },
   {
-    icon: "▤",
+    icon: ReceiptText,
     title: "Tax",
     blurb:
       "A UK tax-year summary — income, taxable interest & dividends, pension & Gift Aid — plus a rough tax estimate.",
   },
   {
-    icon: "⚙",
+    icon: Settings,
     title: "Accounts & Settings",
     blurb:
       "Current, savings, credit, ISA, Premium Bonds, investment and pension accounts, currencies & rates, valuations and backups.",
@@ -97,19 +109,19 @@ export default function Landing({
           </div>
         </header>
 
-        {/* Hero */}
-        <section className="mb-16 text-center sm:mb-20">
-          <span className="glass-nested text-glass-2 inline-block rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em]">
+        {/* Hero — deliberately left-aligned, ragged-right */}
+        <section className="mb-16 max-w-3xl sm:mb-20">
+          <div className="text-glass-3 text-xs font-medium uppercase tracking-[0.14em]">
             Free · Self-hosted · Private
-          </span>
-          <h1 className="text-glass mx-auto mt-5 max-w-3xl text-[34px] font-semibold leading-[1.1] tracking-tight sm:text-[52px]">
+          </div>
+          <h1 className="text-glass mt-4 text-[34px] font-semibold leading-[1.08] tracking-tight sm:text-[52px]">
             Take control of your money.
           </h1>
-          <p className="text-glass-2 mx-auto mt-4 max-w-2xl text-[15px] sm:text-[17px]">
+          <p className="text-glass-2 mt-4 max-w-2xl text-[15px] sm:text-[17px]">
             Every account, budget, goal, forecast and UK tax figure in one clean, private place —
             running on your own machine. No ads, no data harvesting, no subscription.
           </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <div className="mt-7 flex flex-wrap gap-3">
             <Button variant="primary" onClick={onSignup} className="!px-5 !py-2.5 text-[15px]">
               Get started — it's free
             </Button>
@@ -121,18 +133,18 @@ export default function Landing({
 
         {/* Modules */}
         <section>
-          <h2 className="text-glass mb-1 text-center text-[24px] font-semibold tracking-tight">
+          <h2 className="text-glass mb-1 text-[24px] font-semibold tracking-tight">
             Everything in one app
           </h2>
-          <p className="text-glass-3 mb-7 text-center text-[13px]">Each module, at a glance.</p>
+          <p className="text-glass-3 mb-7 text-[13px]">Each module, at a glance.</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {MODULES.map((m) => (
               <Tile key={m.title} rounded="rounded-glass" className="p-5">
                 <div
-                  className="flex h-[38px] w-[38px] items-center justify-center rounded-xl text-[18px] text-[#64d2ff]"
+                  className="text-balance flex h-[38px] w-[38px] items-center justify-center rounded-xl"
                   style={{ background: "rgba(100,210,255,0.12)" }}
                 >
-                  {m.icon}
+                  <m.icon size={17} strokeWidth={1.75} />
                 </div>
                 <div className="text-glass mt-3 text-[15px] font-semibold">{m.title}</div>
                 <p className="text-glass-3 mt-1.5 text-[13px] leading-relaxed">{m.blurb}</p>
@@ -141,13 +153,11 @@ export default function Landing({
           </div>
         </section>
 
-        {/* Highlights */}
-        <section className="mt-10 flex flex-wrap justify-center gap-2.5">
-          {HIGHLIGHTS.map((h) => (
-            <span
-              key={h}
-              className="glass-nested text-glass-2 rounded-full px-3.5 py-1.5 text-[13px]"
-            >
+        {/* Highlights — a quiet single line, not a wall of pills */}
+        <section className="text-glass-3 mt-10 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
+          {HIGHLIGHTS.map((h, i) => (
+            <span key={h} className="flex items-center gap-x-3">
+              {i > 0 && <span aria-hidden>·</span>}
               {h}
             </span>
           ))}
@@ -155,23 +165,24 @@ export default function Landing({
 
         {/* Donate */}
         <section className="mt-16 sm:mt-20">
-          <Tile className="p-8 text-center sm:p-10">
-            <div className="text-[28px]">♥</div>
-            <h2 className="text-glass mt-2 text-[22px] font-semibold tracking-tight">
-              Free forever — donations keep it going
-            </h2>
-            <p className="text-glass-2 mx-auto mt-2 max-w-xl text-[14px]">
-              This app is completely free to use. If it helps you stay on top of your finances and
-              you'd like to support its development, a small donation is hugely appreciated — but
-              never required.
-            </p>
-            <a href={DONATE_URL} target="_blank" rel="noopener noreferrer">
-              <Button variant="primary" className="mt-6 !px-6 !py-2.5 text-[15px]">
-                ♥ Donate
+          <Tile className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+            <div className="max-w-xl">
+              <h2 className="text-glass text-[22px] font-semibold tracking-tight">
+                Free forever — donations keep it going
+              </h2>
+              <p className="text-glass-2 mt-2 text-[14px]">
+                This app is completely free to use. If it helps you stay on top of your finances
+                and you'd like to support its development, a small donation is hugely appreciated —
+                but never required.
+              </p>
+            </div>
+            <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" className="shrink-0">
+              <Button variant="primary" className="inline-flex items-center gap-2 !px-6 !py-2.5 text-[15px]">
+                <Heart size={15} strokeWidth={2} /> Donate
               </Button>
             </a>
           </Tile>
-          <p className="text-glass-3 mt-6 text-center text-xs">
+          <p className="text-glass-3 mt-6 text-xs">
             Your data stays on your own server. © {new Date().getFullYear()} SuperSaver.
           </p>
         </section>

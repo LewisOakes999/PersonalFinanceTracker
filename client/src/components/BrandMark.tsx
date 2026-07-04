@@ -2,7 +2,8 @@
 // app's signature blue→teal glass tile. Defined once here and used everywhere
 // (sidebar, mobile bar, auth screen, landing page) so the brand stays uniform.
 
-const TILE_BG = "linear-gradient(140deg, #0a84ff, #30d5c8)";
+// The brand gradient itself lives in tailwind.config.js (`bg-brand`) — the
+// only gradient in the palette, reserved for this tile.
 const TILE_SHADOW =
   "inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 16px -4px rgba(10,132,255,0.6)";
 // Darker tone for the pig's "cut-out" details so they read over the gradient.
@@ -47,8 +48,8 @@ export function BrandMark({ size = 22, className }: { size?: number; className?:
 export function BrandTile({ size = 38 }: { size?: number }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-xl"
-      style={{ width: size, height: size, background: TILE_BG, boxShadow: TILE_SHADOW }}
+      className="bg-brand flex shrink-0 items-center justify-center rounded-xl"
+      style={{ width: size, height: size, boxShadow: TILE_SHADOW }}
     >
       <BrandMark size={Math.round(size * 0.62)} />
     </div>

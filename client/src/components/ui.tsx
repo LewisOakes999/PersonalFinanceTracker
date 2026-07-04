@@ -1,40 +1,20 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { X } from "lucide-react";
 
-/** Small tax-free "ISA" badge. */
-export function IsaBadge() {
+/** Small account-type badge (ISA / PB / PEN / INV). One neutral style for all —
+ *  the badge is metadata, not a status, so it doesn't earn a colour. */
+function AccountBadge({ children }: { children: string }) {
   return (
-    <span className="rounded-md border border-[#34e0c4]/40 bg-[#34e0c4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#34e0c4]">
-      ISA
+    <span className="rounded border border-white/15 bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-glass-2">
+      {children}
     </span>
   );
 }
 
-/** Small tax-free "Premium Bonds" badge. */
-export function PbBadge() {
-  return (
-    <span className="rounded-md border border-[#bf5af2]/40 bg-[#bf5af2]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#bf5af2]">
-      PB
-    </span>
-  );
-}
-
-/** Small "PEN" badge for pension accounts. */
-export function PensionBadge() {
-  return (
-    <span className="rounded-md border border-[#30d5c8]/40 bg-[#30d5c8]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#30d5c8]">
-      PEN
-    </span>
-  );
-}
-
-/** Small "INV" badge for variable-return investment accounts. */
-export function InvestmentBadge() {
-  return (
-    <span className="rounded-md border border-[#7d7aff]/40 bg-[#7d7aff]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#7d7aff]">
-      INV
-    </span>
-  );
-}
+export const IsaBadge = () => <AccountBadge>ISA</AccountBadge>;
+export const PbBadge = () => <AccountBadge>PB</AccountBadge>;
+export const PensionBadge = () => <AccountBadge>PEN</AccountBadge>;
+export const InvestmentBadge = () => <AccountBadge>INV</AccountBadge>;
 
 /** Decorative background colour-bloom the frosted glass refracts. */
 export function Bloom() {
@@ -81,47 +61,38 @@ export function Tile({
   );
 }
 
-const TONES: Record<string, { color: string; glow?: string }> = {
-  default: { color: "var(--lg-text)" },
-  income: { color: "#34e0c4", glow: "rgba(52,224,196,0.55)" },
-  expense: { color: "#ff6b8a", glow: "rgba(255,107,138,0.5)" },
-  accent: { color: "#64d2ff", glow: "rgba(100,210,255,0.5)" },
+const TONES: Record<string, string> = {
+  default: "var(--lg-text)",
+  income: "#34e0c4",
+  expense: "#ff6b8a",
+  accent: "#64d2ff",
 };
 
-/** A summary stat tile with a soft corner glow blob. */
+/** A summary stat tile: quiet label, loud number. The value colour is the
+ *  only tonal signal — no decorative icon or glow. */
 export function StatTile({
   label,
   value,
   tone = "default",
   sub,
-  icon,
 }: {
   label: string;
   value: string;
   tone?: "default" | "income" | "expense" | "accent";
   sub?: string;
-  icon?: ReactNode;
 }) {
-  const { color, glow } = TONES[tone];
   return (
-    <Tile rounded="rounded-glass" className="relative overflow-hidden p-5">
-      {glow && (
-        <div
-          className="pointer-events-none absolute -right-5 -top-5 h-[90px] w-[90px] rounded-full"
-          style={{ background: glow, filter: "blur(36px)", opacity: 0.5 }}
-        />
-      )}
-      <div className="text-glass-3 relative flex items-center gap-2 text-xs uppercase tracking-[0.08em]">
-        {icon && <span aria-hidden>{icon}</span>}
-        <span>{label}</span>
+    <Tile rounded="rounded-glass" className="p-5">
+      <div className="text-glass-3 text-[11px] font-medium uppercase tracking-[0.08em]">
+        {label}
       </div>
       <div
-        className="num relative mt-3 whitespace-nowrap text-[26px] font-semibold tracking-tight"
-        style={{ color }}
+        className="num mt-3 whitespace-nowrap text-[28px] font-semibold leading-none tracking-tight"
+        style={{ color: TONES[tone] }}
       >
         {value}
       </div>
-      {sub && <div className="text-glass-3 mt-1 text-xs">{sub}</div>}
+      {sub && <div className="text-glass-3 mt-2 text-xs">{sub}</div>}
     </Tile>
   );
 }
@@ -231,7 +202,7 @@ export function Modal({
             className="text-glass-3 hover:text-glass"
             aria-label="Close"
           >
-            ✕
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
         <div className="p-5">{children}</div>
