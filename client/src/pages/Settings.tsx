@@ -21,7 +21,14 @@ import {
   PensionBadge,
   CollapsibleSection,
 } from "../components/ui";
-import { CURRENCIES, formatCurrency } from "../lib/format";
+import {
+  CURRENCIES,
+  formatCurrency,
+  formatDate,
+  nextInterestDate,
+  termLabel,
+  toDateInput,
+} from "../lib/format";
 import { RISK_PROFILES, matchProfile, riskHint } from "../lib/riskProfiles";
 import { useCurrency } from "../lib/CurrencyContext";
 import { useAuth } from "../lib/AuthContext";
@@ -83,6 +90,51 @@ function InvestmentFields({
         />
       </Field>
       <p className="text-glass-3 basis-full text-xs">{riskHint(Number(rate), Number(vol))}</p>
+    </>
+  );
+}
+
+const INTEREST_FREQ: { value: string; label: string }[] = [
+  { value: "", label: "—" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annually", label: "Annually" },
+  { value: "maturity", label: "At maturity" },
+];
+
+/** Optional fixed-term fields (start, maturity, when interest is paid). */
+function TermFields({
+  start,
+  maturity,
+  interestPaid,
+  onStart,
+  onMaturity,
+  onInterestPaid,
+}: {
+  start: string;
+  maturity: string;
+  interestPaid: string;
+  onStart: (v: string) => void;
+  onMaturity: (v: string) => void;
+  onInterestPaid: (v: string) => void;
+}) {
+  return (
+    <>
+      <Field label="Start date">
+        <input type="date" className="num" value={start} onChange={(e) => onStart(e.target.value)} />
+      </Field>
+      <Field label="Maturity date">
+        <input type="date" className="num" value={maturity} onChange={(e) => onMaturity(e.target.value)} />
+      </Field>
+      <Field label="Interest paid">
+        <select value={interestPaid} onChange={(e) => onInterestPaid(e.target.value)}>
+          {INTEREST_FREQ.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </Field>
     </>
   );
 }
@@ -552,6 +604,9 @@ function AccountsManager({
   const [isPremiumBonds, setIsPremiumBonds] = useState(false);
   const [isInvestment, setIsInvestment] = useState(false);
   const [isPension, setIsPension] = useState(false);
+  const [termStart, setTermStart] = useState("");
+  const [maturityDate, setMaturityDate] = useState("");
+  const [interestPaid, setInterestPaid] = useState("");
   const [error, setError] = useState("");
 
   const add = async (e: FormEvent) => {
@@ -569,6 +624,9 @@ function AccountsManager({
       isPremiumBonds,
       isInvestment,
       isPension,
+      termStart: termStart || null,
+      maturityDate: maturityDate || null,
+      interestPaid: interestPaid || null,
     });
     setName("");
     setCurrency(baseCurrency);
@@ -579,6 +637,9 @@ function AccountsManager({
     setIsPremiumBonds(false);
     setIsInvestment(false);
     setIsPension(false);
+    setTermStart("");
+    setMaturityDate("");
+    setInterestPaid("");
     onChange();
   };
 
@@ -691,6 +752,14 @@ function AccountsManager({
           />
           Pension
         </label>
+        <TermFields
+          start={termStart}
+          maturity={maturityDate}
+          interestPaid={interestPaid}
+          onStart={setTermStart}
+          onMaturity={setMaturityDate}
+          onInterestPaid={setInterestPaid}
+        />
         <Button type="submit" variant="primary">
           Add Account
         </Button>
@@ -722,6 +791,9 @@ function AccountRow({
   const [isPremiumBonds, setIsPremiumBonds] = useState(account.isPremiumBonds);
   const [isInvestment, setIsInvestment] = useState(account.isInvestment);
   const [isPension, setIsPension] = useState(account.isPension);
+  const [termStart, setTermStart] = useState(toDateInput(account.termStart));
+  const [maturityDate, setMaturityDate] = useState(toDateInput(account.maturityDate));
+  const [interestPaid, setInterestPaid] = useState(account.interestPaid ?? "");
 
   const save = async () => {
     await api.updateAccount(account.id, {
@@ -735,6 +807,9 @@ function AccountRow({
       isPremiumBonds,
       isInvestment,
       isPension,
+      termStart: termStart || null,
+      maturityDate: maturityDate || null,
+      interestPaid: interestPaid || null,
     });
     setEditing(false);
     onChange();
@@ -742,14 +817,25 @@ function AccountRow({
 
   if (!editing) {
     return (
-      <li className="flex items-center justify-between gap-3 py-2 text-sm">
-        <span className="flex items-center gap-2 text-glass">
-          {account.name}
-          <span className="text-xs uppercase tracking-wider text-glass-3">{account.type}</span>
-          {account.isIsa && <IsaBadge />}
-          {account.isPremiumBonds && <PbBadge />}
-          {account.isInvestment && <InvestmentBadge />}
-          {account.isPension && <PensionBadge />}
+      <li className="flex items-start justify-between gap-3 py-2 text-sm">
+        <span className="min-w-0">
+          <span className="flex items-center gap-2 text-glass">
+            {account.name}
+            <span className="text-xs uppercase tracking-wider text-glass-3">{account.type}</span>
+            {account.isIsa && <IsaBadge />}
+            {account.isPremiumBonds && <PbBadge />}
+            {account.isInvestment && <InvestmentBadge />}
+            {account.isPension && <PensionBadge />}
+          </span>
+          {account.maturityDate && (
+            <span className="text-glass-3 mt-0.5 block text-xs">
+              {termLabel(account.termStart, account.maturityDate) &&
+                `${termLabel(account.termStart, account.maturityDate)} · `}
+              matures {formatDate(account.maturityDate)}
+              {nextInterestDate(account) &&
+                ` · interest ${formatDate(nextInterestDate(account)!)}`}
+            </span>
+          )}
         </span>
         <span className="flex items-center gap-4">
           <span className="num text-glass-3">
@@ -857,6 +943,14 @@ function AccountRow({
           />
           Pension
         </label>
+        <TermFields
+          start={termStart}
+          maturity={maturityDate}
+          interestPaid={interestPaid}
+          onStart={setTermStart}
+          onMaturity={setMaturityDate}
+          onInterestPaid={setInterestPaid}
+        />
         <Button variant="primary" onClick={save}>
           Save
         </Button>

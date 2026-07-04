@@ -96,6 +96,8 @@ async function main() {
     data: {
       userId, name: "Cash ISA", type: "savings", currency: "GBP",
       openingBalance: 8200, isIsa: true, interestRate: 4.75,
+      // 1-year fixed ISA; interest paid at maturity.
+      termStart: new Date("2026-03-01"), maturityDate: new Date("2027-03-01"), interestPaid: "maturity",
     },
   });
   const credit = await prisma.account.create({

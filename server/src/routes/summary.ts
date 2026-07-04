@@ -76,6 +76,9 @@ summaryRouter.get(
         isInvestment: account.isInvestment,
         isPension: account.isPension,
         interestRate: toNumber(account.interestRate),
+        termStart: account.termStart,
+        maturityDate: account.maturityDate,
+        interestPaid: account.interestPaid,
         balance,
         baseBalance: round2(conv.toBase(balance, account.currency)),
       };

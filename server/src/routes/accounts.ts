@@ -18,6 +18,9 @@ const accountInput = z.object({
   isPension: z.boolean().default(false),
   interestRate: z.number().finite().min(-100).max(999).default(0),
   volatility: z.number().finite().min(0).max(999).default(0),
+  termStart: z.coerce.date().nullable().optional(),
+  maturityDate: z.coerce.date().nullable().optional(),
+  interestPaid: z.enum(["monthly", "quarterly", "annually", "maturity"]).nullable().optional(),
 });
 
 accountsRouter.get(

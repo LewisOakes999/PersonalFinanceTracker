@@ -80,6 +80,9 @@ model Account {
   isPension       Boolean       @default(false) // pension pot (annual allowance, tax-relieved)
   interestRate    Decimal       @default(0) @db.Decimal(6, 3) // annual rate / expected return (%)
   volatility      Decimal       @default(0) @db.Decimal(6, 3) // annual volatility / std-dev (%) for investments
+  termStart       DateTime?     // fixed-term start date (optional)
+  maturityDate    DateTime?     // fixed-term maturity / end date (optional)
+  interestPaid    String?       // monthly | quarterly | annually | maturity (optional)
   transactions    Transaction[]
   transfersOut    Transfer[]             @relation("TransferFrom")
   transfersIn     Transfer[]             @relation("TransferTo")

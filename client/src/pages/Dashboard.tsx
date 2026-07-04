@@ -35,7 +35,7 @@ import {
 } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { defaultPeriod, periodParams, type Period } from "../lib/period";
-import { formatCurrency, formatDate } from "../lib/format";
+import { formatCurrency, formatDate, nextInterestDate } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
 
 const INCOME = "#34e0c4";
@@ -295,6 +295,13 @@ export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void 
               {balances && a.currency !== balances.baseCurrency && (
                 <div className="num text-glass-3 mt-0.5 text-[11px]">
                   ≈ {format(a.baseBalance)}
+                </div>
+              )}
+              {a.maturityDate && (
+                <div className="text-glass-3 mt-1 text-[11px]">
+                  {nextInterestDate(a)
+                    ? `Interest ${formatDate(nextInterestDate(a)!)}`
+                    : `Matures ${formatDate(a.maturityDate)}`}
                 </div>
               )}
             </Tile>

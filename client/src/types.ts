@@ -19,6 +19,9 @@ export interface Account {
   isPension: boolean;
   interestRate: number;
   volatility: number;
+  termStart?: string | null; // fixed-term start (ISO)
+  maturityDate?: string | null; // fixed-term maturity / end (ISO)
+  interestPaid?: string | null; // monthly | quarterly | annually | maturity
   createdAt?: string;
 }
 
@@ -175,6 +178,9 @@ export interface AccountBalance {
   isInvestment: boolean;
   isPension: boolean;
   interestRate: number;
+  termStart?: string | null;
+  maturityDate?: string | null;
+  interestPaid?: string | null;
   balance: number; // in the account's own currency
   baseBalance: number; // converted to the base/display currency
 }
