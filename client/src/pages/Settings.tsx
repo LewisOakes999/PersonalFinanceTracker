@@ -601,7 +601,7 @@ function RatesManager({
 
   return (
     <CollapsibleSection title="Exchange Rates">
-      <p className="text-glass-3 -mt-2 mb-3 text-xs">
+      <p className="text-glass-3 mb-3 text-xs">
         Value of 1 unit of each currency in {baseCurrency}. Used to convert other-currency accounts
         into your base currency. Currencies without a rate are assumed 1:1.
       </p>
@@ -760,7 +760,7 @@ function ValuationsManager({
 
   return (
     <CollapsibleSection title="Account Values">
-      <p className="text-glass-3 -mt-2 mb-4 text-xs">
+      <p className="text-glass-3 mb-4 text-xs">
         Record what an account is really worth (e.g. an investment or pension pot) or correct a
         balance. The value applies from its date; later transactions and transfers adjust from
         there.
@@ -920,7 +920,7 @@ function CategoriesManager({
 
   return (
     <CollapsibleSection title="Categories">
-      <p className="text-glass-3 -mt-2 mb-4 text-xs">
+      <p className="text-glass-3 mb-4 text-xs">
         Tag a category as Interest, Dividend or Gift Aid so it feeds the Tax tab.
       </p>
       <div className="mb-4 grid grid-cols-1 gap-6 sm:grid-cols-2">
