@@ -36,7 +36,9 @@ function matchesTransfer(tr: Transfer, query: string): boolean {
   );
 }
 
-export default function Transactions() {
+export default function Transactions({
+  initialAccountId,
+}: { initialAccountId?: string } = {}) {
   const { format } = useCurrency();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -46,6 +48,7 @@ export default function Transactions() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [accountFilter, setAccountFilter] = useState(initialAccountId ?? "");
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("all"));
   const [sort, setSort] = useState<SortField>("date");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
@@ -61,6 +64,7 @@ export default function Transactions() {
     if (search) params.search = search;
     if (typeFilter === "income" || typeFilter === "expense") params.type = typeFilter;
     if (categoryFilter) params.categoryId = categoryFilter;
+    if (accountFilter) params.accountId = accountFilter;
     api.listTransactions(params).then(setTransactions);
     api.listTransfers(pp).then(setTransfers);
   };
@@ -70,7 +74,7 @@ export default function Transactions() {
     api.listAccounts().then(setAccounts);
   }, []);
 
-  useEffect(refresh, [search, typeFilter, categoryFilter, period, sort, order]);
+  useEffect(refresh, [search, typeFilter, categoryFilter, accountFilter, period, sort, order]);
 
   // Merge transactions + transfers into one sorted feed.
   const feed = useMemo<FeedRow[]>(() => {
@@ -79,7 +83,11 @@ export default function Transactions() {
     const rows: FeedRow[] = [];
     if (showTxns) for (const t of transactions) rows.push({ kind: "txn", t });
     if (showXfers) {
-      const list = search ? transfers.filter((tr) => matchesTransfer(tr, search)) : transfers;
+      let list = search ? transfers.filter((tr) => matchesTransfer(tr, search)) : transfers;
+      if (accountFilter)
+        list = list.filter(
+          (tr) => tr.fromAccountId === accountFilter || tr.toAccountId === accountFilter
+        );
       for (const t of list) rows.push({ kind: "xfer", t });
     }
     const valueOf = (r: FeedRow): string | number => {
@@ -98,7 +106,7 @@ export default function Transactions() {
       return order === "asc" ? cmp : -cmp;
     });
     return rows;
-  }, [transactions, transfers, typeFilter, categoryFilter, search, sort, order]);
+  }, [transactions, transfers, typeFilter, categoryFilter, accountFilter, search, sort, order]);
 
   const toggleSort = (field: SortField) => {
     if (sort === field) setOrder(order === "asc" ? "desc" : "asc");
@@ -183,6 +191,16 @@ export default function Transactions() {
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Account">
+          <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
+            <option value="">All</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
               </option>
             ))}
           </select>

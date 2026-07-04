@@ -125,10 +125,19 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [txnAccountId, setTxnAccountId] = useState<string | null>(null);
   const { user, logout } = useAuth();
 
   const go = (id: Tab) => {
     setTab(id);
+    setNavOpen(false);
+    setTxnAccountId(null); // sidebar/nav navigation clears any account filter
+  };
+
+  // Open Transactions pre-filtered to a specific account (from a dashboard tile).
+  const viewAccount = (accountId: string) => {
+    setTxnAccountId(accountId);
+    setTab("transactions");
     setNavOpen(false);
   };
 
@@ -184,8 +193,10 @@ export default function App() {
 
         {/* Main content */}
         <main className="min-w-0 overflow-y-auto px-4 pb-10 pt-2 md:px-[30px] md:pl-1.5 md:pt-[26px]">
-          {tab === "dashboard" && <Dashboard onAddAccount={() => go("settings")} />}
-          {tab === "transactions" && <Transactions />}
+          {tab === "dashboard" && (
+            <Dashboard onAddAccount={() => go("settings")} onViewAccount={viewAccount} />
+          )}
+          {tab === "transactions" && <Transactions initialAccountId={txnAccountId ?? undefined} />}
           {tab === "analytics" && <Analytics />}
           {tab === "budgets" && <Budgets />}
           {tab === "goals" && <Goals />}

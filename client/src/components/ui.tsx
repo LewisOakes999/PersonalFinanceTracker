@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, KeyboardEvent, ReactNode } from "react";
 import { useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 
@@ -49,14 +49,34 @@ export function Tile({
   className = "",
   nested = false,
   rounded = "rounded-panel",
+  onClick,
 }: {
   children: ReactNode;
   className?: string;
   nested?: boolean;
   rounded?: string;
+  onClick?: () => void;
 }) {
+  const interactive = onClick
+    ? {
+        role: "button",
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (e: KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        },
+      }
+    : {};
   return (
-    <div className={`${nested ? "glass-nested" : "glass"} ${rounded} ${className}`}>
+    <div
+      className={`${nested ? "glass-nested" : "glass"} ${rounded} ${
+        onClick ? "cursor-pointer" : ""
+      } ${className}`}
+      {...interactive}
+    >
       {children}
     </div>
   );

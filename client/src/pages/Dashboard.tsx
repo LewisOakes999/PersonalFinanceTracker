@@ -93,7 +93,13 @@ const ASSET_ICONS: Record<string, LucideIcon> = {
   other: Wallet,
 };
 
-export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void }) {
+export default function Dashboard({
+  onAddAccount,
+  onViewAccount,
+}: {
+  onAddAccount?: () => void;
+  onViewAccount?: (accountId: string) => void;
+}) {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
   const [totals, setTotals] = useState<Totals | null>(null);
@@ -265,7 +271,13 @@ export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void 
           {balances?.accounts.map((a) => {
             const AccountIcon = ACCOUNT_ICONS[a.type] ?? Wallet;
             return (
-            <Tile key={a.id} nested rounded="rounded-tile" className="p-[18px]">
+            <Tile
+              key={a.id}
+              nested
+              rounded="rounded-tile"
+              className="p-[18px] transition-colors hover:bg-white/[0.06]"
+              onClick={onViewAccount ? () => onViewAccount(a.id) : undefined}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="truncate text-[14px] font-medium text-glass">{a.name}</div>
