@@ -20,6 +20,8 @@ const DECIMAL_FIELDS = [
   "targetAmount",
   "savedAmount",
   "value",
+  "balance",
+  "monthlyPayment",
 ];
 
 /** Shallow-convert known Decimal fields on a record to numbers. */

@@ -31,7 +31,24 @@ model User {
   valuations   AccountValuation[]
   exchangeRates ExchangeRate[]
   attachments  Attachment[]
+  liabilities  Liability[]
   settings     Settings?
+}
+
+model Liability {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           String // loan | mortgage | lease | credit | other
+  currency       String   @default("GBP")
+  balance        Decimal  @default(0) @db.Decimal(14, 2) // outstanding amount owed
+  interestRate   Decimal  @default(0) @db.Decimal(6, 3) // annual % (optional)
+  monthlyPayment Decimal  @default(0) @db.Decimal(14, 2) // optional
+  note           String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Account {

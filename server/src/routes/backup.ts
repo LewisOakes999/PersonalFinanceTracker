@@ -22,6 +22,7 @@ backupRouter.get(
       goals,
       valuations,
       rates,
+      liabilities,
       settings,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
@@ -35,6 +36,7 @@ backupRouter.get(
       prisma.goal.findMany({ where: { userId } }),
       prisma.accountValuation.findMany({ where: { userId } }),
       prisma.exchangeRate.findMany({ where: { userId } }),
+      prisma.liability.findMany({ where: { userId } }),
       prisma.settings.findUnique({ where: { userId } }),
     ]);
 
@@ -52,6 +54,7 @@ backupRouter.get(
       goals,
       valuations,
       rates,
+      liabilities,
       settings,
     });
   })
@@ -84,6 +87,7 @@ backupRouter.post(
     await prisma.goal.deleteMany({ where: { userId } });
     await prisma.category.deleteMany({ where: { userId } });
     await prisma.account.deleteMany({ where: { userId } });
+    await prisma.liability.deleteMany({ where: { userId } });
 
     // Recreate (referenced rows before referrers).
     await prisma.account.createMany({ data: withUser(data.accounts) });
@@ -97,6 +101,7 @@ backupRouter.post(
     await prisma.goal.createMany({ data: withUser(data.goals) });
     await prisma.accountValuation.createMany({ data: withUser(data.valuations) });
     await prisma.exchangeRate.createMany({ data: withUser(data.rates) });
+    await prisma.liability.createMany({ data: withUser(data.liabilities ?? []) });
     if (data.settings?.currency) {
       await prisma.settings.upsert({
         where: { userId },

@@ -284,9 +284,29 @@ export interface Forecast {
   totals: { income: number; expenses: number; interest: number; taxFreeInterest: number; net: number };
 }
 
+export interface Liability {
+  id: string;
+  name: string;
+  type: string; // loan | mortgage | lease | credit | other
+  currency: string;
+  balance: number; // outstanding amount owed
+  interestRate: number;
+  monthlyPayment: number;
+  note: string | null;
+  createdAt?: string;
+}
+
+export interface LiabilityBalance extends Liability {
+  baseBalance: number; // owed, in the base currency
+}
+
 export interface Balances {
   accounts: AccountBalance[];
-  overall: number; // in the base currency
+  liabilities: LiabilityBalance[];
+  overall: number; // total assets, in the base currency (kept for compatibility)
+  assets: number; // total account balances, in the base currency
+  liabilitiesTotal: number; // total owed, in the base currency
+  netWorth: number; // assets − liabilities
   baseCurrency: string;
 }
 

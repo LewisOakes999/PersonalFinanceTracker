@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   Banknote,
   Briefcase,
+  Car,
   Clapperboard,
   CreditCard,
   Fuel,
@@ -76,6 +77,14 @@ const ACCOUNT_ICONS: Record<string, LucideIcon> = {
   investment: TrendingUp,
 };
 
+const LIABILITY_ICONS: Record<string, LucideIcon> = {
+  mortgage: Home,
+  lease: Car,
+  credit: CreditCard,
+  loan: Banknote,
+  other: Wallet,
+};
+
 export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void }) {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
@@ -120,10 +129,14 @@ export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void 
           sub="income − expenses"
         />
         <StatTile
-          label="Balance"
-          value={format(balances?.overall ?? 0)}
+          label="Net Worth"
+          value={format(balances?.netWorth ?? balances?.overall ?? 0)}
           tone="accent"
-          sub={`${balances?.accounts.length ?? 0} accounts`}
+          sub={
+            balances && balances.liabilitiesTotal > 0
+              ? `${format(balances.assets)} assets − ${format(balances.liabilitiesTotal)} owed`
+              : `${balances?.accounts.length ?? 0} accounts`
+          }
         />
       </div>
 
@@ -281,6 +294,61 @@ export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void 
           })}
         </div>
       </Tile>
+
+      {/* Liabilities */}
+      {balances && balances.liabilities.length > 0 && (
+        <Tile className="p-[22px]">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+              Liabilities
+            </h2>
+            {onAddAccount && (
+              <button
+                onClick={onAddAccount}
+                className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
+              >
+                + Add liability
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+            {balances.liabilities.map((l) => {
+              const LiabilityIcon = LIABILITY_ICONS[l.type] ?? Banknote;
+              return (
+                <Tile key={l.id} nested rounded="rounded-tile" className="p-[18px]">
+                  <div className="flex items-center justify-between">
+                    <div className="truncate text-[14px] font-medium text-glass">{l.name}</div>
+                    <div
+                      className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-glass-2"
+                      style={{ background: tint(EXPENSE, 0.18) }}
+                    >
+                      <LiabilityIcon size={13} strokeWidth={1.75} />
+                    </div>
+                  </div>
+                  <div className="text-glass-3 mt-0.5 text-[11px] uppercase tracking-[0.06em]">
+                    {l.type}
+                    {l.interestRate > 0 && ` · ${l.interestRate.toFixed(2)}%`}
+                  </div>
+                  <div
+                    className="num mt-3 text-[22px] font-semibold tracking-tight"
+                    style={{ color: EXPENSE }}
+                  >
+                    −{formatCurrency(l.balance, l.currency)}
+                  </div>
+                  {l.monthlyPayment > 0 && (
+                    <div className="num text-glass-3 mt-0.5 text-[11px]">
+                      {formatCurrency(l.monthlyPayment, l.currency)}/mo
+                    </div>
+                  )}
+                  {balances && l.currency !== balances.baseCurrency && (
+                    <div className="num text-glass-3 mt-0.5 text-[11px]">≈ {format(l.baseBalance)}</div>
+                  )}
+                </Tile>
+              );
+            })}
+          </div>
+        </Tile>
+      )}
     </div>
   );
 }

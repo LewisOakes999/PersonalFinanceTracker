@@ -56,10 +56,10 @@ summaryRouter.get(
   "/balances",
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
-    const accounts = await prisma.account.findMany({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-    });
+    const [accounts, liabilityRows] = await Promise.all([
+      prisma.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+      prisma.liability.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    ]);
     const [balanceMap, conv] = await Promise.all([accountBalances(userId), getConversion(userId)]);
 
     const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -80,8 +80,33 @@ summaryRouter.get(
       };
     });
 
-    const overall = round2(balances.reduce((sum, a) => sum + a.baseBalance, 0));
-    res.json({ accounts: balances, overall, baseCurrency: conv.base });
+    const liabilities = liabilityRows.map((l) => {
+      const balance = toNumber(l.balance);
+      return {
+        id: l.id,
+        name: l.name,
+        type: l.type,
+        currency: l.currency,
+        interestRate: toNumber(l.interestRate),
+        monthlyPayment: toNumber(l.monthlyPayment),
+        note: l.note,
+        balance,
+        baseBalance: round2(conv.toBase(balance, l.currency)),
+      };
+    });
+
+    const assets = round2(balances.reduce((sum, a) => sum + a.baseBalance, 0));
+    const liabilitiesTotal = round2(liabilities.reduce((sum, l) => sum + l.baseBalance, 0));
+    res.json({
+      accounts: balances,
+      liabilities,
+      // `overall` kept for backward compatibility (= total assets).
+      overall: assets,
+      assets,
+      liabilitiesTotal,
+      netWorth: round2(assets - liabilitiesTotal),
+      baseCurrency: conv.base,
+    });
   })
 );
 
@@ -326,11 +351,18 @@ summaryRouter.get(
       labels.push(d.toISOString().slice(0, 7));
     }
 
-    const [accounts, conv] = await Promise.all([
+    const [accounts, liabilityRows, conv] = await Promise.all([
       prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
+      prisma.liability.findMany({ where: { userId }, select: { balance: true, currency: true } }),
       getConversion(userId),
     ]);
     const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
+    // Liabilities have no history, so their current total is applied as a
+    // constant offset — this keeps the latest point consistent with net worth.
+    const liabilitiesTotal = liabilityRows.reduce(
+      (sum, l) => sum + conv.toBase(toNumber(l.balance), l.currency),
+      0
+    );
 
     // Valuation- and currency-aware total net worth as of each month end.
     const result = [];
@@ -339,7 +371,7 @@ summaryRouter.get(
       const map = await accountBalances(userId, monthEnd);
       let total = 0;
       for (const [accId, bal] of map) total += conv.toBase(bal, currencyOf.get(accId) ?? conv.base);
-      result.push({ month: m, netWorth: Math.round(total * 100) / 100 });
+      result.push({ month: m, netWorth: Math.round((total - liabilitiesTotal) * 100) / 100 });
     }
     res.json(result);
   })

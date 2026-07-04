@@ -11,6 +11,7 @@ import type {
   Goal,
   InvestmentForecast,
   IsaAllowance,
+  Liability,
   NetWorthPoint,
   Recurring,
   RecurringTransfer,
@@ -206,6 +207,14 @@ export const api = {
   updateAccount: (id: string, data: Partial<Account>) =>
     request<Account>(`/accounts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteAccount: (id: string) => request<void>(`/accounts/${id}`, { method: "DELETE" }),
+
+  // Liabilities (loans, mortgages, leases…)
+  listLiabilities: () => request<Liability[]>("/liabilities"),
+  createLiability: (data: Partial<Liability>) =>
+    request<Liability>("/liabilities", { method: "POST", body: JSON.stringify(data) }),
+  updateLiability: (id: string, data: Partial<Liability>) =>
+    request<Liability>(`/liabilities/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteLiability: (id: string) => request<void>(`/liabilities/${id}`, { method: "DELETE" }),
 
   // Budgets
   listBudgets: (month: string) => request<Budget[]>(`/budgets?month=${month}`),
