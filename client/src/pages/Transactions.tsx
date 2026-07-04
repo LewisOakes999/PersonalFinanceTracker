@@ -880,6 +880,23 @@ function ImportModal({
     }
   };
 
+  const downloadTemplate = () => {
+    const csv = [
+      "date,amount,type,category,description",
+      "2026-01-15,52.40,expense,Groceries,Weekly shop",
+      "2026-01-25,3200.00,income,Salary,Monthly pay",
+      "2026-01-28,12.99,expense,Subscriptions,Streaming service",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "supersaver-transactions-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Modal title="Import Transactions (CSV)" onClose={onClose}>
       {result ? (
@@ -910,11 +927,38 @@ function ImportModal({
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-4">
-          <p className="text-xs text-glass-3">
-            Expected columns:{" "}
-            <code className="text-glass">date, amount, type, category, description</code>.
-            Unknown categories are created automatically.
-          </p>
+          <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-glass-3">
+            <p>
+              Columns:{" "}
+              <code className="text-glass">date, amount, type, category, description</code>
+            </p>
+            <ul className="list-disc space-y-0.5 pl-4">
+              <li>
+                <b className="text-glass-2">date</b> — e.g. 2026-01-15 (YYYY-MM-DD)
+              </li>
+              <li>
+                <b className="text-glass-2">amount</b> — a positive number, e.g. 52.40
+              </li>
+              <li>
+                <b className="text-glass-2">type</b> — <code>income</code> or <code>expense</code>{" "}
+                (defaults to expense)
+              </li>
+              <li>
+                <b className="text-glass-2">category</b> — any name; new ones are created
+                automatically
+              </li>
+              <li>
+                <b className="text-glass-2">description</b> — optional
+              </li>
+            </ul>
+            <button
+              type="button"
+              onClick={downloadTemplate}
+              className="font-medium text-[#64d2ff] hover:underline"
+            >
+              ↓ Download template CSV
+            </button>
+          </div>
           <Field label="Import into account">
             <select className="w-full" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               {accounts.map((a) => (
