@@ -17,8 +17,7 @@ import {
   IsaBadge,
   PbBadge,
   PensionBadge,
-  SectionTitle,
-  Tile,
+  CollapsibleSection,
 } from "../components/ui";
 import { CURRENCIES } from "../lib/format";
 import { RISK_PROFILES, matchProfile, riskHint } from "../lib/riskProfiles";
@@ -107,8 +106,7 @@ export default function Settings() {
       </header>
 
       {/* Currency */}
-      <Tile className="p-5">
-        <SectionTitle>Base Currency</SectionTitle>
+      <CollapsibleSection title="Base Currency">
         <div className="flex items-center gap-3">
           <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {CURRENCIES.map((c) => (
@@ -123,7 +121,7 @@ export default function Settings() {
           The currency totals and net worth are shown in. Accounts in other currencies are converted
           using the exchange rates below.
         </p>
-      </Tile>
+      </CollapsibleSection>
 
       <RatesManager accounts={accounts} baseCurrency={currency} />
       <SecurityManager />
@@ -180,8 +178,7 @@ function SecurityManager() {
   };
 
   return (
-    <Tile className="p-5">
-      <SectionTitle>Security</SectionTitle>
+    <CollapsibleSection title="Security">
       <form onSubmit={submit} className="max-w-md space-y-4">
         <Field label="Email">
           <input
@@ -230,7 +227,7 @@ function SecurityManager() {
           {busy ? "Saving…" : "Update credentials"}
         </Button>
       </form>
-    </Tile>
+    </CollapsibleSection>
   );
 }
 
@@ -294,8 +291,7 @@ function AccountsManager({
   };
 
   return (
-    <Tile className="p-5">
-      <SectionTitle>Accounts</SectionTitle>
+    <CollapsibleSection title="Accounts" defaultOpen>
       <ul className="mb-4 divide-y divide-white/10">
         {accounts.map((a) => (
           <AccountRow
@@ -399,7 +395,7 @@ function AccountsManager({
         </Button>
       </form>
       {error && <div className="mt-2 text-sm text-[#ff6b8a]">{error}</div>}
-    </Tile>
+    </CollapsibleSection>
   );
 }
 
@@ -604,8 +600,7 @@ function RatesManager({
   if (usedCurrencies.length === 0 && rates.length === 0) return null;
 
   return (
-    <Tile className="p-5">
-      <SectionTitle>Exchange Rates</SectionTitle>
+    <CollapsibleSection title="Exchange Rates">
       <p className="text-glass-3 -mt-2 mb-3 text-xs">
         Value of 1 unit of each currency in {baseCurrency}. Used to convert other-currency accounts
         into your base currency. Currencies without a rate are assumed 1:1.
@@ -675,7 +670,7 @@ function RatesManager({
           Set Rate
         </Button>
       </div>
-    </Tile>
+    </CollapsibleSection>
   );
 }
 
@@ -707,8 +702,7 @@ function BackupManager() {
   };
 
   return (
-    <Tile className="p-5">
-      <SectionTitle>Backup & Restore</SectionTitle>
+    <CollapsibleSection title="Backup & Restore">
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={() =>
@@ -736,7 +730,7 @@ function BackupManager() {
         <span className="text-[#ff9bae]">replaces everything</span> currently in your account.
       </p>
       {msg && <div className="mt-2 text-sm text-[#64d2ff]">{msg}</div>}
-    </Tile>
+    </CollapsibleSection>
   );
 }
 
@@ -765,8 +759,7 @@ function ValuationsManager({
   const nameById = new Map(accounts.map((a) => [a.id, a.name]));
 
   return (
-    <Tile className="p-5">
-      <SectionTitle>Account Values</SectionTitle>
+    <CollapsibleSection title="Account Values">
       <p className="text-glass-3 -mt-2 mb-4 text-xs">
         Record what an account is really worth (e.g. an investment or pension pot) or correct a
         balance. The value applies from its date; later transactions and transfers adjust from
@@ -829,7 +822,7 @@ function ValuationsManager({
           </ul>
         </>
       )}
-    </Tile>
+    </CollapsibleSection>
   );
 }
 
@@ -926,8 +919,7 @@ function CategoriesManager({
   const expense = categories.filter((c) => c.type === "expense");
 
   return (
-    <Tile className="p-5">
-      <SectionTitle>Categories</SectionTitle>
+    <CollapsibleSection title="Categories">
       <p className="text-glass-3 -mt-2 mb-4 text-xs">
         Tag a category as Interest, Dividend or Gift Aid so it feeds the Tax tab.
       </p>
@@ -958,7 +950,7 @@ function CategoriesManager({
         </Button>
       </form>
       {error && <div className="mt-2 text-sm text-[#ff6b8a]">{error}</div>}
-    </Tile>
+    </CollapsibleSection>
   );
 }
 

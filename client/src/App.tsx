@@ -184,7 +184,7 @@ export default function App() {
 
         {/* Main content */}
         <main className="min-w-0 overflow-y-auto px-4 pb-10 pt-2 md:px-[30px] md:pl-1.5 md:pt-[26px]">
-          {tab === "dashboard" && <Dashboard />}
+          {tab === "dashboard" && <Dashboard onAddAccount={() => go("settings")} />}
           {tab === "transactions" && <Transactions />}
           {tab === "analytics" && <Analytics />}
           {tab === "budgets" && <Budgets />}

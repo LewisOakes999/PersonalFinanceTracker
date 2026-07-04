@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Lightbulb } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lightbulb, Minus } from "lucide-react";
 import { api } from "../api/client";
 import { useCurrency } from "../lib/CurrencyContext";
 import { currentMonth } from "../lib/format";
@@ -25,6 +25,21 @@ export function SidebarTips() {
   const [tips, setTips] = useState<string[]>(SAVING_TIPS);
   const [i, setI] = useState(0);
   const paused = useRef(false);
+  const [minimised, setMin] = useState(() => {
+    try {
+      return localStorage.getItem("ss_tips_min") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setMinimised = (v: boolean) => {
+    setMin(v);
+    try {
+      localStorage.setItem("ss_tips_min", v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
 
   // Build personalised tips from the user's own data.
   useEffect(() => {
@@ -118,6 +133,22 @@ export function SidebarTips() {
   if (tips.length === 0) return null;
   const go = (n: number) => setI(((n % tips.length) + tips.length) % tips.length);
 
+  // Collapsed: just the lightbulb, tucked into the bottom-left. Click to reopen.
+  if (minimised) {
+    return (
+      <div className="flex">
+        <button
+          onClick={() => setMinimised(false)}
+          aria-label="Show saving tips"
+          title="Show saving tips"
+          className="glass-nested text-glass-3 hover:text-glass flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-white/5"
+        >
+          <Lightbulb size={16} strokeWidth={2} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       className="glass-nested rounded-2xl px-3 py-2.5"
@@ -142,6 +173,14 @@ export function SidebarTips() {
             className="text-glass-3 hover:text-glass flex h-5 w-5 items-center justify-center rounded-md hover:bg-white/10"
           >
             <ChevronRight size={13} strokeWidth={2} />
+          </button>
+          <button
+            onClick={() => setMinimised(true)}
+            aria-label="Minimise tips"
+            title="Minimise"
+            className="text-glass-3 hover:text-glass ml-0.5 flex h-5 w-5 items-center justify-center rounded-md hover:bg-white/10"
+          >
+            <Minus size={13} strokeWidth={2} />
           </button>
         </div>
       </div>

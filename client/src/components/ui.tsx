@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
+import { X, ChevronDown } from "lucide-react";
 
 /** Small account-type badge (ISA / PB / PEN / INV). One neutral style for all —
  *  the badge is metadata, not a status, so it doesn't earn a colour. */
@@ -216,6 +217,48 @@ export function SectionTitle({ children }: { children: ReactNode }) {
     <h2 className="text-glass-2 mb-4 text-[13px] font-semibold uppercase tracking-[0.06em]">
       {children}
     </h2>
+  );
+}
+
+/** A glass panel whose body collapses/expands when its title header is clicked. */
+export function CollapsibleSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="glass rounded-panel">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 rounded-panel px-5 py-4 text-left transition-colors hover:bg-white/[0.03]"
+      >
+        <span className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+          {title}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-glass-3 shrink-0 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="px-5 pb-5">{children}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -76,7 +76,7 @@ const ACCOUNT_ICONS: Record<string, LucideIcon> = {
   investment: TrendingUp,
 };
 
-export default function Dashboard() {
+export default function Dashboard({ onAddAccount }: { onAddAccount?: () => void }) {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
   const [totals, setTotals] = useState<Totals | null>(null);
@@ -227,7 +227,19 @@ export default function Dashboard() {
 
       {/* Balances by account */}
       <Tile className="p-[22px]">
-        <SectionTitle>Balances by Account</SectionTitle>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+            Balances by Account
+          </h2>
+          {onAddAccount && (
+            <button
+              onClick={onAddAccount}
+              className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
+            >
+              + Add account
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           {balances?.accounts.map((a) => {
             const AccountIcon = ACCOUNT_ICONS[a.type] ?? Wallet;
