@@ -49,6 +49,7 @@ export default function Transactions({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [accountFilter, setAccountFilter] = useState(initialAccountId ?? "");
+  const [tagFilter, setTagFilter] = useState("");
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("all"));
   const [sort, setSort] = useState<SortField>("date");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
@@ -76,12 +77,21 @@ export default function Transactions({
 
   useEffect(refresh, [search, typeFilter, categoryFilter, accountFilter, period, sort, order]);
 
+  const allTags = useMemo(
+    () => [...new Set(transactions.flatMap((t) => t.tags ?? []))].sort(),
+    [transactions]
+  );
+
   // Merge transactions + transfers into one sorted feed.
   const feed = useMemo<FeedRow[]>(() => {
-    const showXfers = !categoryFilter && (typeFilter === "" || typeFilter === "transfer");
+    const showXfers = !categoryFilter && !tagFilter && (typeFilter === "" || typeFilter === "transfer");
     const showTxns = typeFilter !== "transfer";
     const rows: FeedRow[] = [];
-    if (showTxns) for (const t of transactions) rows.push({ kind: "txn", t });
+    if (showTxns)
+      for (const t of transactions) {
+        if (tagFilter && !(t.tags ?? []).includes(tagFilter)) continue;
+        rows.push({ kind: "txn", t });
+      }
     if (showXfers) {
       let list = search ? transfers.filter((tr) => matchesTransfer(tr, search)) : transfers;
       if (accountFilter)
@@ -106,7 +116,7 @@ export default function Transactions({
       return order === "asc" ? cmp : -cmp;
     });
     return rows;
-  }, [transactions, transfers, typeFilter, categoryFilter, accountFilter, search, sort, order]);
+  }, [transactions, transfers, typeFilter, categoryFilter, accountFilter, tagFilter, search, sort, order]);
 
   const toggleSort = (field: SortField) => {
     if (sort === field) setOrder(order === "asc" ? "desc" : "asc");
@@ -252,6 +262,18 @@ export default function Transactions({
             ))}
           </select>
         </Field>
+        {allTags.length > 0 && (
+          <Field label="Tag">
+            <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+              <option value="">All</option>
+              {allTags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Period">
           <PeriodSelector value={period} onChange={setPeriod} allowAll />
         </Field>
@@ -287,6 +309,18 @@ export default function Transactions({
                     )}
                     {row.t.description || <span className="text-glass-3">—</span>}
                     {row.t.note && <span className="ml-2 text-xs text-glass-3">({row.t.note})</span>}
+                    {row.t.tags?.length > 0 && (
+                      <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                        {row.t.tags.map((tg) => (
+                          <span
+                            key={tg}
+                            className="text-glass-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px]"
+                          >
+                            {tg}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     {row.t.splits.length > 0 ? (
@@ -550,6 +584,7 @@ function TransactionForm({
   const [accountId, setAccountId] = useState(transaction?.accountId ?? accounts[0]?.id ?? "");
   const [description, setDescription] = useState(transaction?.description ?? "");
   const [note, setNote] = useState(transaction?.note ?? "");
+  const [tags, setTags] = useState(transaction?.tags?.join(", ") ?? "");
   const [splitMode, setSplitMode] = useState((transaction?.splits?.length ?? 0) > 0);
   const [splits, setSplits] = useState<{ categoryId: string; amount: string }[]>(
     transaction?.splits?.length
@@ -585,6 +620,10 @@ function TransactionForm({
       accountId,
       description,
       note: note || null,
+      tags: tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
     };
 
     let payload: Record<string, unknown>;
@@ -736,6 +775,14 @@ function TransactionForm({
         </Field>
         <Field label="Note (optional)">
           <input className="w-full" value={note ?? ""} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        <Field label="Tags (optional, comma-separated)">
+          <input
+            className="w-full"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="e.g. holiday, reimbursable"
+          />
         </Field>
 
         {transaction ? (

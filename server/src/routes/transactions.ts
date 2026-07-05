@@ -17,6 +17,7 @@ const transactionInput = z.object({
   accountId: z.string().min(1),
   description: z.string().default(""),
   note: z.string().nullable().optional(),
+  tags: z.array(z.string().min(1).max(24)).max(30).optional(),
   splits: z
     .array(z.object({ categoryId: z.string().min(1), amount: z.number().finite().positive() }))
     .optional(),

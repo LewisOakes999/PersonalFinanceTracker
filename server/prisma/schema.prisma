@@ -155,6 +155,7 @@ model Transaction {
   type        TxnType
   description String   @default("")
   note        String?
+  tags        String[] @default([])
   categoryId  String
   accountId   String
   category    Category @relation(fields: [categoryId], references: [id])

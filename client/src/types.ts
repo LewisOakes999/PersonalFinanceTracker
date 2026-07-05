@@ -87,6 +87,7 @@ export interface Transaction {
   type: TxnType;
   description: string;
   note: string | null;
+  tags: string[];
   categoryId: string;
   accountId: string;
   category: Category;
