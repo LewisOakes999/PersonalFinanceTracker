@@ -1081,11 +1081,29 @@ function RatesManager({
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [newCur, setNewCur] = useState("USD");
   const [newRate, setNewRate] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = () => api.listRates().then(setRates);
   useEffect(() => {
     load();
   }, []);
+
+  const refreshLive = async () => {
+    setRefreshing(true);
+    try {
+      const res = await api.refreshRates();
+      await load();
+      toast.success(
+        res.updated > 0
+          ? `Updated ${res.updated} rate(s) to live${res.asOf ? ` (as of ${res.asOf})` : ""}.`
+          : "No non-base currencies to update."
+      );
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const usedCurrencies = [...new Set(accounts.map((a) => a.currency))].filter(
     (c) => c !== baseCurrency
@@ -1111,6 +1129,11 @@ function RatesManager({
         Value of 1 unit of each currency in {baseCurrency}. Used to convert other-currency accounts
         into your base currency. Currencies without a rate are assumed 1:1.
       </p>
+      <div className="mb-3">
+        <Button onClick={refreshLive} disabled={refreshing}>
+          {refreshing ? "Fetching…" : "↻ Fetch live rates"}
+        </Button>
+      </div>
       <ul className="mb-4 divide-y divide-white/10">
         {usedCurrencies.map((c) => {
           const r = rateFor(c);

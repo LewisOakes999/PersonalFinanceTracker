@@ -285,6 +285,11 @@ export const api = {
   setRate: (currency: string, rate: number) =>
     request<ExchangeRate>("/rates", { method: "PUT", body: JSON.stringify({ currency, rate }) }),
   deleteRate: (currency: string) => request<void>(`/rates/${currency}`, { method: "DELETE" }),
+  refreshRates: () =>
+    request<{ updated: number; currencies: string[]; base: string; asOf?: string }>(
+      "/rates/refresh",
+      { method: "POST", body: "{}" }
+    ),
 
   // Tax
   taxSummary: (year?: number) =>
