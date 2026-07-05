@@ -11,6 +11,7 @@ import type {
   Forecast,
   Settings,
   SpendingInsights,
+  Subscriptions,
   Upcoming,
   Goal,
   InvestmentForecast,
@@ -261,6 +262,7 @@ export const api = {
     request<SpendingInsights>(`/summary/insights${month ? `?month=${month}` : ""}`),
   upcoming: (days?: number) =>
     request<Upcoming>(`/summary/upcoming${days ? `?days=${days}` : ""}`),
+  subscriptions: () => request<Subscriptions>("/summary/subscriptions"),
   investmentForecast: (params: {
     accountId?: string;
     months?: number;

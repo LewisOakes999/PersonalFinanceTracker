@@ -767,3 +767,81 @@ summaryRouter.get(
     res.json({ startingBalance, days, items: out });
   })
 );
+
+// GET /api/summary/subscriptions — detect recurring merchant charges from the
+// expense history (same-ish description + amount at a regular interval).
+summaryRouter.get(
+  "/subscriptions",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - 400);
+
+    const [txns, accounts, conv] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId, type: "expense", date: { gte: since }, description: { not: "" } },
+        select: { description: true, amount: true, date: true, accountId: true },
+        orderBy: { date: "asc" },
+      }),
+      prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
+      getConversion(userId),
+    ]);
+    const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    // Group by normalised description.
+    const groups = new Map<string, { name: string; dates: Date[]; amounts: number[] }>();
+    for (const t of txns) {
+      const key = t.description.trim().toLowerCase();
+      if (!key) continue;
+      const g = groups.get(key) ?? { name: t.description.trim(), dates: [], amounts: [] };
+      g.name = t.description.trim(); // keep the latest casing
+      g.dates.push(t.date);
+      g.amounts.push(conv.toBase(toNumber(t.amount), currencyOf.get(t.accountId) ?? conv.base));
+      groups.set(key, g);
+    }
+
+    const classify = (days: number): { freq: string; perMonth: number } | null => {
+      if (days >= 5 && days <= 9) return { freq: "weekly", perMonth: 52 / 12 };
+      if (days >= 12 && days <= 16) return { freq: "fortnightly", perMonth: 26 / 12 };
+      if (days >= 26 && days <= 35) return { freq: "monthly", perMonth: 1 };
+      if (days >= 84 && days <= 96) return { freq: "quarterly", perMonth: 1 / 3 };
+      if (days >= 350 && days <= 385) return { freq: "yearly", perMonth: 1 / 12 };
+      return null;
+    };
+    const median = (xs: number[]) => {
+      const s = [...xs].sort((a, b) => a - b);
+      const mid = Math.floor(s.length / 2);
+      return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    };
+
+    const subs = [];
+    for (const g of groups.values()) {
+      if (g.dates.length < 3) continue;
+      const intervals: number[] = [];
+      for (let i = 1; i < g.dates.length; i++) {
+        intervals.push((g.dates[i].getTime() - g.dates[i - 1].getTime()) / 86400000);
+      }
+      const medInt = median(intervals);
+      const cls = classify(medInt);
+      if (!cls) continue;
+      const medAmt = median(g.amounts);
+      const maxAmt = Math.max(...g.amounts);
+      const minAmt = Math.min(...g.amounts);
+      if (medAmt <= 0 || maxAmt / Math.max(minAmt, 0.01) > 1.6) continue; // too variable
+
+      subs.push({
+        name: g.name,
+        amount: round2(medAmt),
+        frequency: cls.freq,
+        lastDate: g.dates[g.dates.length - 1].toISOString().slice(0, 10),
+        count: g.dates.length,
+        monthlyCost: round2(medAmt * cls.perMonth),
+      });
+    }
+    subs.sort((a, b) => b.monthlyCost - a.monthlyCost);
+    const totalMonthly = round2(subs.reduce((s, x) => s + x.monthlyCost, 0));
+
+    res.json({ subscriptions: subs, totalMonthly, totalAnnual: round2(totalMonthly * 12) });
+  })
+);

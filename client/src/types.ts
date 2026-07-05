@@ -386,6 +386,21 @@ export interface Upcoming {
   items: UpcomingItem[];
 }
 
+export interface Subscription {
+  name: string;
+  amount: number;
+  frequency: string;
+  lastDate: string;
+  count: number;
+  monthlyCost: number;
+}
+
+export interface Subscriptions {
+  subscriptions: Subscription[];
+  totalMonthly: number;
+  totalAnnual: number;
+}
+
 export interface CategoryTotal {
   categoryId: string;
   category: string;

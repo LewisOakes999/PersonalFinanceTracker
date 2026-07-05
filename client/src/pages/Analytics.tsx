@@ -13,7 +13,13 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api/client";
-import type { CategoryTotal, NetWorthPoint, Transaction, TrendPoint } from "../types";
+import type {
+  CategoryTotal,
+  NetWorthPoint,
+  Subscriptions,
+  Transaction,
+  TrendPoint,
+} from "../types";
 import { SectionTitle, Tile } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { defaultPeriod, periodParams, type Period } from "../lib/period";
@@ -34,6 +40,7 @@ export default function Analytics() {
   const [netWorth, setNetWorth] = useState<NetWorthPoint[]>([]);
   const [selectedCat, setSelectedCat] = useState<CategoryTotal | null>(null);
   const [drill, setDrill] = useState<Transaction[]>([]);
+  const [subs, setSubs] = useState<Subscriptions | null>(null);
 
   useEffect(() => {
     api.byCategory(periodParams(period), "expense").then((data) => {
@@ -45,6 +52,7 @@ export default function Analytics() {
   useEffect(() => {
     api.trend(12).then(setTrend);
     api.netWorth(12).then(setNetWorth);
+    api.subscriptions().then(setSubs);
   }, []);
 
   useEffect(() => {
@@ -75,6 +83,34 @@ export default function Analytics() {
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />
       </header>
+
+      {/* Detected subscriptions */}
+      {subs && subs.subscriptions.length > 0 && (
+        <Tile className="p-[22px]">
+          <SectionTitle>Detected Subscriptions</SectionTitle>
+          <p className="text-glass-3 mb-3 text-xs">
+            Recurring charges spotted in your history ·{" "}
+            <span className="num text-glass-2">{format(subs.totalMonthly)}</span>/mo ·{" "}
+            <span className="num text-glass-2">{format(subs.totalAnnual)}</span>/yr
+          </p>
+          <ul className="divide-y divide-white/10">
+            {subs.subscriptions.map((s, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="flex min-w-0 items-center gap-2 text-glass">
+                  <span className="truncate">{s.name}</span>
+                  <span className="text-glass-3 shrink-0 text-xs">
+                    · {s.frequency} · last {formatDate(s.lastDate).slice(0, 6)}
+                  </span>
+                </span>
+                <span className="num shrink-0 text-glass-2">
+                  {format(s.amount)}{" "}
+                  <span className="text-glass-3 text-xs">({format(s.monthlyCost)}/mo)</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Tile>
+      )}
 
       {/* Net worth over time */}
       <Tile className="p-[22px]">
