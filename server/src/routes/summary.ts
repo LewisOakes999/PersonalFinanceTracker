@@ -7,6 +7,7 @@ import { accountBalances } from "../lib/balances.js";
 import { monteCarlo } from "../lib/montecarlo.js";
 import { resolveRange } from "../lib/range.js";
 import { getConversion } from "../lib/currency.js";
+import { advance } from "../lib/recurfreq.js";
 
 export const summaryRouter = Router();
 
@@ -661,5 +662,108 @@ summaryRouter.get(
       movers,
       roundUp: round2(roundUp),
     });
+  })
+);
+
+// GET /api/summary/upcoming?days=45 — scheduled recurring transactions and
+// transfers over the next N days, with a running projected balance (base ccy).
+summaryRouter.get(
+  "/upcoming",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const days = Math.min(Math.max(Number(req.query.days) || 45, 1), 365);
+
+    const [recTxns, recXfers, balanceMap, accounts, conv] = await Promise.all([
+      prisma.recurringTransaction.findMany({
+        where: { userId, active: true },
+        include: {
+          category: { select: { name: true, color: true } },
+          account: { select: { name: true, currency: true } },
+        },
+      }),
+      prisma.recurringTransfer.findMany({
+        where: { userId, active: true },
+        include: {
+          fromAccount: { select: { name: true } },
+          toAccount: { select: { name: true, currency: true } },
+        },
+      }),
+      accountBalances(userId),
+      prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
+      getConversion(userId),
+    ]);
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
+    let start = 0;
+    for (const [id, bal] of balanceMap) start += conv.toBase(bal, currencyOf.get(id) ?? conv.base);
+    const startingBalance = round2(start);
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const horizon = new Date(today);
+    horizon.setUTCDate(horizon.getUTCDate() + days);
+
+    type Item = {
+      date: Date;
+      kind: "txn" | "xfer";
+      type: string;
+      description: string;
+      category: string | null;
+      categoryColor: string | null;
+      account: string;
+      amount: number;
+    };
+    const items: Item[] = [];
+
+    for (const r of recTxns) {
+      let d = new Date(r.nextDate);
+      let n = 0;
+      while (d <= horizon && (!r.endDate || d <= r.endDate) && n < 400) {
+        if (d >= today) {
+          items.push({
+            date: new Date(d),
+            kind: "txn",
+            type: r.type,
+            description: r.description || r.category.name,
+            category: r.category.name,
+            categoryColor: r.category.color,
+            account: r.account.name,
+            amount: round2(conv.toBase(toNumber(r.amount), r.account.currency)),
+          });
+        }
+        d = advance(d, r.frequency);
+        n++;
+      }
+    }
+    for (const r of recXfers) {
+      let d = new Date(r.nextDate);
+      let n = 0;
+      while (d <= horizon && (!r.endDate || d <= r.endDate) && n < 400) {
+        if (d >= today) {
+          items.push({
+            date: new Date(d),
+            kind: "xfer",
+            type: "transfer",
+            description: `${r.fromAccount.name} → ${r.toAccount.name}${r.note ? ` (${r.note})` : ""}`,
+            category: null,
+            categoryColor: null,
+            account: `${r.fromAccount.name} → ${r.toAccount.name}`,
+            amount: round2(conv.toBase(toNumber(r.amount), r.toAccount.currency)),
+          });
+        }
+        d = advance(d, r.frequency);
+        n++;
+      }
+    }
+
+    items.sort((a, b) => a.date.getTime() - b.date.getTime());
+    let bal = startingBalance;
+    const out = items.map((it) => {
+      if (it.kind === "txn") bal += it.type === "income" ? it.amount : -it.amount;
+      return { ...it, date: it.date.toISOString().slice(0, 10), runningBalance: round2(bal) };
+    });
+
+    res.json({ startingBalance, days, items: out });
   })
 );

@@ -23,7 +23,14 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { api } from "../api/client";
-import type { Balances, CategoryTotal, SpendingInsights, Totals, Transaction } from "../types";
+import type {
+  Balances,
+  CategoryTotal,
+  SpendingInsights,
+  Totals,
+  Transaction,
+  Upcoming,
+} from "../types";
 import {
   InvestmentBadge,
   IsaBadge,
@@ -107,6 +114,7 @@ export default function Dashboard({
   const [byCategory, setByCategory] = useState<CategoryTotal[]>([]);
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [insights, setInsights] = useState<SpendingInsights | null>(null);
+  const [upcoming, setUpcoming] = useState<Upcoming | null>(null);
 
   useEffect(() => {
     const params = periodParams(period);
@@ -118,6 +126,7 @@ export default function Dashboard({
   useEffect(() => {
     api.balances().then(setBalances);
     api.insights().then(setInsights);
+    api.upcoming(45).then(setUpcoming);
   }, []);
 
   const totalSpent = byCategory.reduce((s, c) => s + c.total, 0);
@@ -253,6 +262,48 @@ export default function Dashboard({
           )}
         </Tile>
       </div>
+
+      {/* Upcoming scheduled items + running balance */}
+      {upcoming && upcoming.items.length > 0 && (
+        <Tile className="p-[22px]">
+          <SectionTitle>Upcoming · next {upcoming.days} days</SectionTitle>
+          <ul className="divide-y divide-white/10">
+            {upcoming.items.slice(0, 8).map((it, i) => {
+              const amtColor =
+                it.type === "income" ? INCOME : it.type === "transfer" ? undefined : EXPENSE;
+              const sign = it.type === "income" ? "+" : it.type === "transfer" ? "" : "−";
+              return (
+                <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="num w-14 shrink-0 text-[11px] text-glass-3">
+                      {formatDate(it.date).slice(0, 6)}
+                    </span>
+                    {it.categoryColor && (
+                      <span
+                        className="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]"
+                        style={{ backgroundColor: it.categoryColor }}
+                      />
+                    )}
+                    <span className="truncate text-glass">{it.description}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-4">
+                    <span className="num" style={{ color: amtColor }}>
+                      {sign}
+                      {format(it.amount)}
+                    </span>
+                    <span
+                      className="num text-[11px] text-glass-3"
+                      style={{ color: it.runningBalance < 0 ? EXPENSE : undefined }}
+                    >
+                      {format(it.runningBalance)}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Tile>
+      )}
 
       {/* Spending insights: month-over-month movers + round-up pot */}
       {insights && insights.movers.length > 0 && (

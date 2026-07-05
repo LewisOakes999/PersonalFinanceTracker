@@ -11,6 +11,7 @@ import type {
   Forecast,
   Settings,
   SpendingInsights,
+  Upcoming,
   Goal,
   InvestmentForecast,
   IsaAllowance,
@@ -258,6 +259,8 @@ export const api = {
   isaAllowance: () => request<IsaAllowance>("/summary/isa-allowance"),
   insights: (month?: string) =>
     request<SpendingInsights>(`/summary/insights${month ? `?month=${month}` : ""}`),
+  upcoming: (days?: number) =>
+    request<Upcoming>(`/summary/upcoming${days ? `?days=${days}` : ""}`),
   investmentForecast: (params: {
     accountId?: string;
     months?: number;

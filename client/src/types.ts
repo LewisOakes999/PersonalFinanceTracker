@@ -368,6 +368,24 @@ export interface SpendingInsights {
   roundUp: number;
 }
 
+export interface UpcomingItem {
+  date: string;
+  kind: "txn" | "xfer";
+  type: string; // income | expense | transfer
+  description: string;
+  category: string | null;
+  categoryColor: string | null;
+  account: string;
+  amount: number;
+  runningBalance: number;
+}
+
+export interface Upcoming {
+  startingBalance: number;
+  days: number;
+  items: UpcomingItem[];
+}
+
 export interface CategoryTotal {
   categoryId: string;
   category: string;
