@@ -217,3 +217,56 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* ---------------------------------------------------------------------------
+   Light theme — opt-in via <html data-theme="light">. Re-tints the glass
+   tokens and remaps the handful of hardcoded white/x utilities to dark-on-light.
+   --------------------------------------------------------------------------- */
+[data-theme="light"] {
+  --lg-bloom: 0.16;
+  --lg-glass: rgba(255, 255, 255, 0.72);
+  --lg-glass-nested: rgba(0, 0, 0, 0.03);
+  --lg-border: rgba(0, 0, 0, 0.1);
+  --lg-border-nested: rgba(0, 0, 0, 0.07);
+  --lg-text: #17171c;
+  --lg-text-2: rgba(23, 23, 28, 0.66);
+  --lg-text-3: rgba(23, 23, 28, 0.46);
+}
+[data-theme="light"] body {
+  background: #eef1f6;
+}
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  background: rgba(0, 0, 0, 0.05);
+}
+[data-theme="light"] select option {
+  background: #ffffff;
+  color: var(--lg-text);
+}
+[data-theme="light"] .glass {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -14px rgba(0, 0, 0, 0.18);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+/* Remap the hardcoded white/x utilities to dark-on-light equivalents. */
+[data-theme="light"] .border-white\/10 { border-color: rgba(0, 0, 0, 0.1) !important; }
+[data-theme="light"] .border-white\/15 { border-color: rgba(0, 0, 0, 0.14) !important; }
+[data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .divide-white\/10 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(0, 0, 0, 0.08) !important; }
+[data-theme="light"] .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]) { border-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .bg-white\/5 { background-color: rgba(0, 0, 0, 0.03) !important; }
+[data-theme="light"] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .bg-white\/20 { background-color: rgba(0, 0, 0, 0.1) !important; }
+[data-theme="light"] .bg-white\/\[0\.06\] { background-color: rgba(0, 0, 0, 0.04) !important; }
+[data-theme="light"] .hover\:bg-white\/5:hover { background-color: rgba(0, 0, 0, 0.03) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .hover\:bg-white\/\[0\.03\]:hover { background-color: rgba(0, 0, 0, 0.02) !important; }
+[data-theme="light"] .hover\:bg-white\/\[0\.06\]:hover { background-color: rgba(0, 0, 0, 0.04) !important; }
+[data-theme="light"] .hover\:border-white\/20:hover { border-color: rgba(0, 0, 0, 0.16) !important; }

@@ -32,6 +32,7 @@ import {
 } from "../lib/format";
 import { RISK_PROFILES, matchProfile, riskHint } from "../lib/riskProfiles";
 import { useCurrency } from "../lib/CurrencyContext";
+import { applyTheme, getTheme, type Theme } from "../lib/theme";
 import { useAuth } from "../lib/AuthContext";
 import { toast } from "../lib/toast";
 import { passwordValid } from "../lib/password";
@@ -178,6 +179,7 @@ export default function Settings() {
         </p>
       </CollapsibleSection>
 
+      <AppearanceManager />
       <RatesManager accounts={accounts} baseCurrency={currency} />
       <SecurityManager />
       <BackupManager />
@@ -296,6 +298,37 @@ function CategoryRulesManager({ categories }: { categories: Category[] }) {
           </label>
         </div>
       )}
+    </CollapsibleSection>
+  );
+}
+
+function AppearanceManager() {
+  const [theme, setTheme] = useState<Theme>(getTheme());
+  const choose = (t: Theme) => {
+    setTheme(t);
+    applyTheme(t);
+  };
+  return (
+    <CollapsibleSection title="Appearance">
+      <p className="text-glass-3 mb-3 text-xs">
+        Choose a colour theme. Applies instantly and is remembered on this device.
+      </p>
+      <div className="flex gap-2">
+        {(["dark", "light"] as Theme[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => choose(t)}
+            className={`rounded-xl border px-4 py-2 text-sm transition-colors ${
+              theme === t
+                ? "border-[rgba(10,132,255,0.5)] bg-[rgba(10,132,255,0.18)] text-white"
+                : "border-white/10 bg-white/5 text-glass hover:bg-white/10"
+            }`}
+          >
+            {t === "dark" ? "🌙 Dark" : "☀️ Light"}
+          </button>
+        ))}
+      </div>
     </CollapsibleSection>
   );
 }
