@@ -577,3 +577,89 @@ summaryRouter.get(
     });
   })
 );
+
+// GET /api/summary/insights?month=YYYY-MM — month-over-month spending movers by
+// category, plus a "round-up pot" (what you'd save rounding each expense up to
+// the nearest whole unit).
+summaryRouter.get(
+  "/insights",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const month =
+      typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
+        ? req.query.month
+        : currentMonth();
+    const [y, m] = month.split("-").map(Number);
+    const prevMonth = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+    const thisR = monthRange(month);
+    const prevR = monthRange(prevMonth);
+
+    const [txns, accounts, conv] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId, type: "expense", date: { gte: prevR.start, lt: thisR.end } },
+        select: {
+          amount: true,
+          date: true,
+          accountId: true,
+          category: { select: { id: true, name: true, color: true } },
+        },
+      }),
+      prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
+      getConversion(userId),
+    ]);
+    const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    type Bucket = Map<string, { name: string; color: string; total: number }>;
+    const thisByCat: Bucket = new Map();
+    const prevByCat: Bucket = new Map();
+    let totalThis = 0;
+    let totalPrev = 0;
+    let roundUp = 0;
+
+    for (const t of txns) {
+      const cur = currencyOf.get(t.accountId) ?? conv.base;
+      const amt = toNumber(t.amount);
+      const base = conv.toBase(amt, cur);
+      const inThis = t.date >= thisR.start && t.date < thisR.end;
+      const bucket = inThis ? thisByCat : prevByCat;
+      const rec = bucket.get(t.category.id) ?? { name: t.category.name, color: t.category.color, total: 0 };
+      rec.total += base;
+      bucket.set(t.category.id, rec);
+      if (inThis) {
+        totalThis += base;
+        roundUp += conv.toBase(Math.ceil(amt) - amt, cur);
+      } else {
+        totalPrev += base;
+      }
+    }
+
+    const ids = new Set([...thisByCat.keys(), ...prevByCat.keys()]);
+    const movers = [...ids]
+      .map((id) => {
+        const a = thisByCat.get(id);
+        const b = prevByCat.get(id);
+        const thisMonth = round2(a?.total ?? 0);
+        const prevMonth = round2(b?.total ?? 0);
+        return {
+          category: a?.name ?? b?.name ?? "—",
+          color: a?.color ?? b?.color ?? "#64d2ff",
+          thisMonth,
+          prevMonth,
+          change: round2(thisMonth - prevMonth),
+        };
+      })
+      .filter((mv) => mv.thisMonth > 0 || mv.prevMonth > 0)
+      .sort((x, z) => Math.abs(z.change) - Math.abs(x.change))
+      .slice(0, 6);
+
+    res.json({
+      month,
+      prevMonth,
+      totalThisMonth: round2(totalThis),
+      totalPrevMonth: round2(totalPrev),
+      movers,
+      roundUp: round2(roundUp),
+    });
+  })
+);

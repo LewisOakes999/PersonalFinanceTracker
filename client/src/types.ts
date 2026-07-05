@@ -358,6 +358,15 @@ export interface Balances {
   baseCurrency: string;
 }
 
+export interface SpendingInsights {
+  month: string;
+  prevMonth: string;
+  totalThisMonth: number;
+  totalPrevMonth: number;
+  movers: { category: string; color: string; thisMonth: number; prevMonth: number; change: number }[];
+  roundUp: number;
+}
+
 export interface CategoryTotal {
   categoryId: string;
   category: string;

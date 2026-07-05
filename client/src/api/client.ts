@@ -10,6 +10,7 @@ import type {
   ExchangeRate,
   Forecast,
   Settings,
+  SpendingInsights,
   Goal,
   InvestmentForecast,
   IsaAllowance,
@@ -255,6 +256,8 @@ export const api = {
   trend: (months = 12) => request<TrendPoint[]>(`/summary/trend?months=${months}`),
   netWorth: (months = 12) => request<NetWorthPoint[]>(`/summary/networth?months=${months}`),
   isaAllowance: () => request<IsaAllowance>("/summary/isa-allowance"),
+  insights: (month?: string) =>
+    request<SpendingInsights>(`/summary/insights${month ? `?month=${month}` : ""}`),
   investmentForecast: (params: {
     accountId?: string;
     months?: number;

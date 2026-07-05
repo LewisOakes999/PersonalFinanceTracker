@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { api } from "../api/client";
-import type { Balances, CategoryTotal, Totals, Transaction } from "../types";
+import type { Balances, CategoryTotal, SpendingInsights, Totals, Transaction } from "../types";
 import {
   InvestmentBadge,
   IsaBadge,
@@ -106,6 +106,7 @@ export default function Dashboard({
   const [balances, setBalances] = useState<Balances | null>(null);
   const [byCategory, setByCategory] = useState<CategoryTotal[]>([]);
   const [recent, setRecent] = useState<Transaction[]>([]);
+  const [insights, setInsights] = useState<SpendingInsights | null>(null);
 
   useEffect(() => {
     const params = periodParams(period);
@@ -116,6 +117,7 @@ export default function Dashboard({
 
   useEffect(() => {
     api.balances().then(setBalances);
+    api.insights().then(setInsights);
   }, []);
 
   const totalSpent = byCategory.reduce((s, c) => s + c.total, 0);
@@ -251,6 +253,57 @@ export default function Dashboard({
           )}
         </Tile>
       </div>
+
+      {/* Spending insights: month-over-month movers + round-up pot */}
+      {insights && insights.movers.length > 0 && (
+        <Tile className="p-[22px]">
+          <SectionTitle>Spending Insights · vs last month</SectionTitle>
+          <div className="mb-4 flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="text-glass-3">This month</span>
+            <span className="num text-glass font-medium">{format(insights.totalThisMonth)}</span>
+            {(() => {
+              const diff = insights.totalThisMonth - insights.totalPrevMonth;
+              const up = diff > 0;
+              return (
+                <span className="num text-xs" style={{ color: up ? EXPENSE : INCOME }}>
+                  {up ? "↑" : "↓"} {format(Math.abs(diff))} vs {format(insights.totalPrevMonth)} last month
+                </span>
+              );
+            })()}
+          </div>
+          {insights.roundUp > 0 && (
+            <p className="text-glass-3 mb-4 text-[13px]">
+              💰 Rounding each purchase up to the nearest whole amount would have set aside{" "}
+              <span className="num text-[#34e0c4]">{format(insights.roundUp)}</span> this month.
+            </p>
+          )}
+          <ul className="space-y-2">
+            {insights.movers.map((m) => {
+              const up = m.change > 0;
+              return (
+                <li key={m.category} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2 text-glass">
+                    <span
+                      className="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]"
+                      style={{ backgroundColor: m.color }}
+                    />
+                    {m.category}
+                  </span>
+                  <span className="num text-glass-3">
+                    {format(m.thisMonth)}{" "}
+                    <span
+                      className="text-xs"
+                      style={{ color: m.change === 0 ? undefined : up ? EXPENSE : INCOME }}
+                    >
+                      {m.change === 0 ? "· no change" : `${up ? "↑" : "↓"} ${format(Math.abs(m.change))}`}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Tile>
+      )}
 
       {/* Balances by account */}
       <Tile className="p-[22px]">
