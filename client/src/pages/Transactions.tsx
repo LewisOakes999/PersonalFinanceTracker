@@ -136,6 +136,52 @@ export default function Transactions({
     refresh();
   };
 
+  // Open a clean, printable statement of the current (filtered) feed. Users can
+  // print it or "Save as PDF" from the browser dialog — no extra dependency.
+  const printStatement = () => {
+    const esc = (s: string) =>
+      s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+    const accName = accountFilter
+      ? accounts.find((a) => a.id === accountFilter)?.name ?? ""
+      : "All accounts";
+    let income = 0;
+    let expenses = 0;
+    const body = feed
+      .map((r) => {
+        if (r.kind === "txn") {
+          const t = r.t;
+          if (t.type === "income") income += t.amount;
+          else expenses += t.amount;
+          const amt = (t.type === "income" ? "+" : "−") + format(t.amount);
+          return `<tr><td>${formatDate(t.date)}</td><td>${esc(t.description || t.category.name)}</td><td>${esc(t.category.name)}</td><td>${esc(t.account.name)}</td><td class="r ${t.type}">${amt}</td></tr>`;
+        }
+        const t = r.t;
+        return `<tr><td>${formatDate(t.date)}</td><td>Transfer${t.note ? " — " + esc(t.note) : ""}</td><td>—</td><td>${esc(t.fromAccount.name)} → ${esc(t.toAccount.name)}</td><td class="r">${format(t.amount)}</td></tr>`;
+      })
+      .join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>SuperSaver statement</title><style>
+      body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;margin:32px;}
+      h1{font-size:20px;margin:0 0 2px;} .sub{color:#666;font-size:12px;margin-bottom:18px;}
+      table{width:100%;border-collapse:collapse;font-size:12px;}
+      th,td{padding:6px 8px;border-bottom:1px solid #e6e6e6;text-align:left;vertical-align:top;}
+      th{color:#666;text-transform:uppercase;font-size:10px;letter-spacing:.05em;}
+      .r{text-align:right;white-space:nowrap;} .income{color:#0a7d5a;} .expense{color:#c0334e;}
+      .totals{margin-top:18px;font-size:13px;} .totals span{margin-right:28px;}
+      @media print{body{margin:12mm;}}
+    </style></head><body>
+      <h1>SuperSaver — Transaction Statement</h1>
+      <div class="sub">${esc(accName)} &middot; ${esc(period.label)} &middot; generated ${new Date().toLocaleDateString("en-GB")}</div>
+      <table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Account</th><th class="r">Amount</th></tr></thead><tbody>${body}</tbody></table>
+      <div class="totals"><span>Income: <b>${format(income)}</b></span><span>Expenses: <b>${format(expenses)}</b></span><span>Net: <b>${format(income - expenses)}</b></span></div>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return toast.error("Allow pop-ups to print or save the statement as PDF.");
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 250);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
@@ -148,6 +194,7 @@ export default function Transactions({
           <Button onClick={() => api.exportCsv().catch((e) => toast.error((e as Error).message))}>
             Export CSV
           </Button>
+          <Button onClick={printStatement}>Print / PDF</Button>
           <Button className="inline-flex items-center gap-1.5" onClick={() => setShowRecurring(true)}>
             <Repeat size={13} strokeWidth={2} /> Recurring
           </Button>
