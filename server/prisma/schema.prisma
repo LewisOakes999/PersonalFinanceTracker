@@ -33,7 +33,20 @@ model User {
   attachments  Attachment[]
   liabilities  Liability[]
   assets       Asset[]
+  categoryRules CategoryRule[]
   settings     Settings?
+}
+
+model CategoryRule {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match      String // case-insensitive substring matched against a transaction's description
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Asset {
@@ -126,6 +139,7 @@ model Category {
   budgets      Budget[]
   recurring    RecurringTransaction[]
   splits       TransactionSplit[]
+  rules        CategoryRule[]
   createdAt    DateTime      @default(now())
 
   @@unique([userId, name])

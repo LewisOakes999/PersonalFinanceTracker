@@ -5,6 +5,7 @@ import type {
   Balances,
   Budget,
   Category,
+  CategoryRule,
   CategoryTotal,
   ExchangeRate,
   Forecast,
@@ -193,6 +194,18 @@ export const api = {
   updateCategory: (id: string, data: Partial<Category>) =>
     request<Category>(`/categories/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCategory: (id: string) => request<void>(`/categories/${id}`, { method: "DELETE" }),
+
+  // Auto-categorisation rules
+  listCategoryRules: () => request<CategoryRule[]>("/category-rules"),
+  createCategoryRule: (data: { match: string; categoryId: string }) =>
+    request<CategoryRule>("/category-rules", { method: "POST", body: JSON.stringify(data) }),
+  deleteCategoryRule: (id: string) =>
+    request<void>(`/category-rules/${id}`, { method: "DELETE" }),
+  applyCategoryRules: (onlyUncategorized: boolean) =>
+    request<{ updated: number }>("/category-rules/apply", {
+      method: "POST",
+      body: JSON.stringify({ onlyUncategorized }),
+    }),
 
   // Account valuations (mark-to-market / reconciliation)
   listValuations: (accountId?: string) =>

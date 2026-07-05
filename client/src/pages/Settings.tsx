@@ -6,6 +6,7 @@ import type {
   AccountBalance,
   Asset,
   Category,
+  CategoryRule,
   ExchangeRate,
   Liability,
   TaxTag,
@@ -185,7 +186,117 @@ export default function Settings() {
       <LiabilitiesManager />
       <ValuationsManager accounts={accounts} format={format} />
       <CategoriesManager categories={categories} onChange={loadCategories} />
+      <CategoryRulesManager categories={categories} />
     </div>
+  );
+}
+
+/** Auto-categorisation rules: keyword in description → category. */
+function CategoryRulesManager({ categories }: { categories: Category[] }) {
+  const [rules, setRules] = useState<CategoryRule[]>([]);
+  const [match, setMatch] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [onlyUncat, setOnlyUncat] = useState(true);
+  const [applying, setApplying] = useState(false);
+
+  const load = () => api.listCategoryRules().then(setRules);
+  useEffect(() => {
+    load();
+  }, []);
+
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!match.trim() || !categoryId) return;
+    try {
+      await api.createCategoryRule({ match: match.trim(), categoryId });
+      setMatch("");
+      setCategoryId("");
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await api.deleteCategoryRule(id);
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  const apply = async () => {
+    setApplying(true);
+    try {
+      const res = await api.applyCategoryRules(onlyUncat);
+      toast.success(`Recategorised ${res.updated} transaction(s).`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <CollapsibleSection title="Category Rules">
+      <p className="text-glass-3 mb-4 text-xs">
+        Automatically categorise transactions whose description contains a keyword. Applied to CSV
+        imports that don't specify a category, and to existing transactions on demand.
+      </p>
+      {rules.length > 0 ? (
+        <ul className="mb-4 divide-y divide-white/10">
+          {rules.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="text-glass-2">
+                contains <b className="text-glass">“{r.match}”</b> <span className="text-glass-3">→</span>{" "}
+                <span className="inline-flex items-center gap-1 text-glass">
+                  <span
+                    className="inline-block h-[10px] w-[10px] rounded-[3px]"
+                    style={{ backgroundColor: r.category.color }}
+                  />
+                  {r.category.name}
+                </span>
+              </span>
+              <button className="text-xs text-[#ff6b8a] hover:underline" onClick={() => remove(r.id)}>
+                delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-glass-3 mb-4 text-sm">No rules yet. Add one below.</p>
+      )}
+      <form onSubmit={add} className="flex flex-wrap items-end gap-3">
+        <Field label="When description contains">
+          <input value={match} onChange={(e) => setMatch(e.target.value)} placeholder="e.g. tesco" />
+        </Field>
+        <Field label="Category">
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Select…</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Button type="submit" variant="primary">
+          Add Rule
+        </Button>
+      </form>
+      {rules.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+          <Button onClick={apply} disabled={applying}>
+            {applying ? "Applying…" : "Apply rules to existing transactions"}
+          </Button>
+          <label className="text-glass-3 flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={onlyUncat} onChange={(e) => setOnlyUncat(e.target.checked)} />
+            only uncategorised
+          </label>
+        </div>
+      )}
+    </CollapsibleSection>
   );
 }
 

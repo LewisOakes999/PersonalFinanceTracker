@@ -57,6 +57,14 @@ export interface Category {
   taxTag: TaxTag | null;
 }
 
+export interface CategoryRule {
+  id: string;
+  match: string;
+  categoryId: string;
+  category: { id: string; name: string; type: TxnType; color: string };
+  createdAt?: string;
+}
+
 export interface Attachment {
   id: string;
   filename: string;

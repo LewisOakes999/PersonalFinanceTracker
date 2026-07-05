@@ -47,6 +47,14 @@ importRouter.post(
     const existing = await prisma.category.findMany({ where: { userId } });
     const categoryByName = new Map(existing.map((c) => [c.name.toLowerCase(), c]));
 
+    // Auto-categorisation rules: fill a category from the description when a row
+    // doesn't specify one.
+    const rules = await prisma.categoryRule.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      include: { category: { select: { name: true } } },
+    });
+
     const created: string[] = [];
     const errors: { line: number; message: string }[] = [];
     let colorIdx = existing.length;
@@ -64,7 +72,10 @@ importRouter.post(
         const date = new Date(row.date);
         if (Number.isNaN(date.getTime())) throw new Error(`invalid date "${row.date}"`);
 
-        const name = (row.category || "Uncategorized").trim();
+        const provided = (row.category || "").trim();
+        const desc = (row.description || "").toLowerCase();
+        const rule = !provided && desc ? rules.find((r) => desc.includes(r.match.toLowerCase())) : undefined;
+        const name = provided || rule?.category.name || "Uncategorized";
         let category = categoryByName.get(name.toLowerCase());
         if (!category) {
           category = await prisma.category.create({

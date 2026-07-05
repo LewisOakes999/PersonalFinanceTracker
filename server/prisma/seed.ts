@@ -77,6 +77,7 @@ async function main() {
   await prisma.exchangeRate.deleteMany({ where: { userId } });
   await prisma.budget.deleteMany({ where: { userId } });
   await prisma.goal.deleteMany({ where: { userId } });
+  await prisma.categoryRule.deleteMany({ where: { userId } });
   await prisma.category.deleteMany({ where: { userId } });
   await prisma.liability.deleteMany({ where: { userId } });
   await prisma.asset.deleteMany({ where: { userId } });
@@ -155,6 +156,15 @@ async function main() {
   for (const c of CATEGORIES) {
     categories[c.name] = await prisma.category.create({ data: { ...c, userId } });
   }
+
+  await prisma.categoryRule.createMany({
+    data: [
+      { userId, match: "tesco", categoryId: categories["Groceries"].id },
+      { userId, match: "aldi", categoryId: categories["Groceries"].id },
+      { userId, match: "spotify", categoryId: categories["Entertainment"].id },
+      { userId, match: "uber", categoryId: categories["Transport"].id },
+    ],
+  });
 
   console.log("Creating transactions...");
   const now = new Date();
