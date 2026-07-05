@@ -47,3 +47,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ToastViewport />
   </React.StrictMode>
 );
+
+// Register the service worker for install/offline support — production only, so
+// the dev server never serves stale bundles from a cache.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

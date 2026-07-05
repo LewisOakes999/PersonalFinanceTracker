@@ -1,0 +1,15 @@
+{
+  "name": "SuperSaver",
+  "short_name": "SuperSaver",
+  "description": "A free, private personal finance tracker — accounts, budgets, goals, forecasts and UK tax figures.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#08080b",
+  "theme_color": "#08080b",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
