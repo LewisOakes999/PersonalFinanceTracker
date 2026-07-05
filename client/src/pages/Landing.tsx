@@ -22,19 +22,19 @@ const MODULES: { icon: LucideIcon; title: string; blurb: string }[] = [
     icon: LayoutDashboard,
     title: "Dashboard",
     blurb:
-      "Your money at a glance — income, expenses, net and per-account balances for any month, year or tax year.",
+      "Your money at a glance — net worth, income, expenses and per-account balances, plus spending insights, round-ups and upcoming bills.",
   },
   {
     icon: ArrowLeftRight,
     title: "Transactions",
     blurb:
-      "Add, search and filter, import & export CSV, split one purchase across categories, and attach receipts.",
+      "Add, search, filter and tag; import (with a template) or export CSV, print a PDF statement, split a purchase and attach receipts.",
   },
   {
     icon: ChartPie,
     title: "Analytics",
     blurb:
-      "Net worth over time, income-vs-expenses trends and a spending-by-category breakdown with drill-down.",
+      "Net worth over time, income-vs-expenses trends, a spending-by-category drill-down and automatic subscription detection.",
   },
   {
     icon: Wallet,
@@ -50,7 +50,7 @@ const MODULES: { icon: LucideIcon; title: string; blurb: string }[] = [
     icon: TrendingUp,
     title: "Forecast",
     blurb:
-      "Project future cash flow, and run a Monte Carlo confidence cone for investments — in today's money if you like.",
+      "Project your cash flow and net worth, model debt paydown, and run a Monte Carlo cone for investments — in today's money if you like.",
   },
   {
     icon: ReceiptText,
@@ -62,16 +62,18 @@ const MODULES: { icon: LucideIcon; title: string; blurb: string }[] = [
     icon: Settings,
     title: "Accounts & Settings",
     blurb:
-      "Current, savings, credit, ISA, Premium Bonds, investment and pension accounts, currencies & rates, valuations and backups.",
+      "Accounts, liabilities and other assets for a true net worth, fixed-term ISAs, auto-categorisation rules, live currency rates, valuations, light/dark theme and backups.",
   },
 ];
 
 const HIGHLIGHTS = [
   "Private & self-hosted",
-  "Multi-currency",
-  "Recurring & transfers",
+  "Net worth: assets & liabilities",
+  "Multi-currency + live rates",
+  "Auto-categorisation",
   "Monte Carlo forecasting",
   "UK tax figures",
+  "Installable app · light & dark",
   "Full backup & restore",
 ];
 
@@ -118,8 +120,8 @@ export default function Landing({
             Take control of your money.
           </h1>
           <p className="text-glass-2 mt-4 max-w-2xl text-[15px] sm:text-[17px]">
-            Every account, budget, goal, forecast and UK tax figure in one clean, private place —
-            running on your own machine. No ads, no data harvesting, no subscription.
+            Your net worth, every account, budget, goal, forecast and UK tax figure in one clean,
+            private place — running on your own machine. No ads, no data harvesting, no subscription.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button variant="primary" onClick={onSignup} className="!px-5 !py-2.5 text-[15px]">
