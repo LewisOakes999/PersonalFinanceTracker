@@ -126,12 +126,14 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [txnAccountId, setTxnAccountId] = useState<string | null>(null);
+  const [settingsFocus, setSettingsFocus] = useState<string | null>(null);
   const { user, logout } = useAuth();
 
   const go = (id: Tab) => {
     setTab(id);
     setNavOpen(false);
     setTxnAccountId(null); // sidebar/nav navigation clears any account filter
+    setSettingsFocus(null);
   };
 
   // Open Transactions pre-filtered to a specific account (from a dashboard tile).
@@ -139,6 +141,18 @@ export default function App() {
     setTxnAccountId(accountId);
     setTab("transactions");
     setNavOpen(false);
+  };
+
+  // Open Settings with a specific section expanded (from dashboard shortcuts).
+  const manage = (section: string) => {
+    setSettingsFocus(section);
+    setTab("settings");
+    setNavOpen(false);
+  };
+
+  const replayTour = () => {
+    if (onboardKey) localStorage.removeItem(onboardKey);
+    setShowOnboarding(true);
   };
 
   // Show the first-login walkthrough once per account (per browser).
@@ -194,7 +208,7 @@ export default function App() {
         {/* Main content */}
         <main className="min-w-0 overflow-y-auto px-4 pb-10 pt-2 md:px-[30px] md:pl-1.5 md:pt-[26px]">
           {tab === "dashboard" && (
-            <Dashboard onAddAccount={() => go("settings")} onViewAccount={viewAccount} />
+            <Dashboard onManage={manage} onGoTo={(t) => go(t as Tab)} onViewAccount={viewAccount} />
           )}
           {tab === "transactions" && <Transactions initialAccountId={txnAccountId ?? undefined} />}
           {tab === "analytics" && <Analytics />}
@@ -202,7 +216,9 @@ export default function App() {
           {tab === "goals" && <Goals />}
           {tab === "forecast" && <Forecast />}
           {tab === "tax" && <Tax />}
-          {tab === "settings" && <Settings />}
+          {tab === "settings" && (
+            <Settings focusSection={settingsFocus} onReplayTour={replayTour} />
+          )}
         </main>
 
         {showOnboarding && (

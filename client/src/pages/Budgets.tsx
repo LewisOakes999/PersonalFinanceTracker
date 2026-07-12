@@ -5,6 +5,7 @@ import type { Budget, Category } from "../types";
 import { Button, Field, MonthSelector, SectionTitle, Tile } from "../components/ui";
 import { currentMonth } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
+import { toast } from "../lib/toast";
 
 const EXPENSE = "#ff6b8a";
 const INCOME = "#34e0c4";
@@ -34,6 +35,7 @@ export default function Budgets() {
     const amount = Number(newAmount);
     if (!newCat || !Number.isFinite(amount) || amount <= 0) return;
     await api.upsertBudget({ categoryId: newCat, month, amount });
+    toast.success("Budget set.");
     setNewCat("");
     setNewAmount("");
     refresh();
@@ -41,11 +43,13 @@ export default function Budgets() {
 
   const updateAmount = async (b: Budget, amount: number) => {
     await api.upsertBudget({ categoryId: b.categoryId, month, amount });
+    toast.success("Budget updated.");
     refresh();
   };
 
   const remove = async (id: string) => {
     await api.deleteBudget(id);
+    toast.success("Budget removed.");
     refresh();
   };
 
@@ -91,7 +95,8 @@ export default function Budgets() {
         <SectionTitle>Budget Progress</SectionTitle>
         {budgets.length === 0 ? (
           <div className="text-glass-3 py-8 text-center text-sm">
-            No budgets set for this month. Add one below.
+            No budgets for this month yet. Use the form below — pick a category, set a monthly
+            limit, and your spending will be tracked against it here.
           </div>
         ) : (
           <div className="space-y-5">

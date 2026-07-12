@@ -138,11 +138,13 @@ export default function Transactions({
   const onDeleteTxn = async (id: string) => {
     if (!confirm("Delete this transaction?")) return;
     await api.deleteTransaction(id);
+    toast.success("Transaction deleted.");
     refresh();
   };
   const onDeleteTransfer = async (id: string) => {
     if (!confirm("Delete this transfer?")) return;
     await api.deleteTransfer(id);
+    toast.success("Transfer deleted.");
     refresh();
   };
 
@@ -407,8 +409,35 @@ export default function Transactions({
             )}
             {feed.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-glass-3">
-                  Nothing matches.
+                <td colSpan={6} className="px-4 py-10 text-center">
+                  {search || typeFilter || categoryFilter || accountFilter || tagFilter ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <span className="text-glass-3">Nothing matches your filters.</span>
+                      <Button
+                        onClick={() => {
+                          setSearch("");
+                          setTypeFilter("");
+                          setCategoryFilter("");
+                          setAccountFilter("");
+                          setTagFilter("");
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <span className="text-glass-3">
+                        No transactions yet. Add your first one, or import a CSV from your bank.
+                      </span>
+                      <div className="flex gap-2">
+                        <Button variant="primary" onClick={() => setEditing("new")}>
+                          + Add Transaction
+                        </Button>
+                        <Button onClick={() => setShowImport(true)}>Import CSV</Button>
+                      </div>
+                    </div>
+                  )}
                 </td>
               </tr>
             )}
@@ -427,6 +456,7 @@ export default function Transactions({
           accounts={accounts}
           onClose={() => setEditing(null)}
           onSaved={() => {
+            toast.success(editing === "new" ? "Transaction added." : "Transaction updated.");
             setEditing(null);
             refresh();
           }}
@@ -439,6 +469,7 @@ export default function Transactions({
           accounts={accounts}
           onClose={() => setEditingTransfer(null)}
           onSaved={() => {
+            toast.success(editingTransfer === "new" ? "Transfer added." : "Transfer updated.");
             setEditingTransfer(null);
             refresh();
           }}

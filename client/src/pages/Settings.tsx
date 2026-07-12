@@ -122,6 +122,9 @@ function TermFields({
 }) {
   return (
     <>
+      <span className="text-glass-3 basis-full text-[11px] uppercase tracking-[0.06em]">
+        Fixed term — optional, for fixed-rate ISAs &amp; bonds
+      </span>
       <Field label="Start date">
         <input type="date" className="num" value={start} onChange={(e) => onStart(e.target.value)} />
       </Field>
@@ -141,7 +144,14 @@ function TermFields({
   );
 }
 
-export default function Settings() {
+export default function Settings({
+  focusSection,
+  onReplayTour,
+}: {
+  /** Section to open on arrival (accounts | assets | liabilities). */
+  focusSection?: string | null;
+  onReplayTour?: () => void;
+} = {}) {
   const { currency, setCurrency, format } = useCurrency();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -184,11 +194,21 @@ export default function Settings() {
       <SecurityManager />
       <BackupManager />
       <AccountsManager accounts={accounts} onChange={loadAccounts} format={format} />
-      <AssetsManager />
-      <LiabilitiesManager />
+      <AssetsManager defaultOpen={focusSection === "assets"} />
+      <LiabilitiesManager defaultOpen={focusSection === "liabilities"} />
       <ValuationsManager accounts={accounts} format={format} />
       <CategoriesManager categories={categories} onChange={loadCategories} />
       <CategoryRulesManager categories={categories} />
+
+      {onReplayTour && (
+        <CollapsibleSection title="Help">
+          <p className="text-glass-3 mb-3 text-xs">
+            New here, or want a refresher? Replay the guided tour that walks through adding
+            accounts, recording transactions and setting budgets.
+          </p>
+          <Button onClick={onReplayTour}>Replay the welcome tour</Button>
+        </CollapsibleSection>
+      )}
     </div>
   );
 }
@@ -211,6 +231,7 @@ function CategoryRulesManager({ categories }: { categories: Category[] }) {
     if (!match.trim() || !categoryId) return;
     try {
       await api.createCategoryRule({ match: match.trim(), categoryId });
+      toast.success("Rule added — it'll apply to future imports.");
       setMatch("");
       setCategoryId("");
       load();
@@ -336,7 +357,7 @@ function AppearanceManager() {
 const ASSET_TYPES = ["property", "vehicle", "valuables", "cash", "other"];
 
 /** Manage non-account assets (property, vehicles…) that count toward net worth. */
-function AssetsManager() {
+function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const [items, setItems] = useState<Asset[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -364,6 +385,7 @@ function AssetsManager() {
     try {
       if (editing) await api.updateAsset(editing, data);
       else await api.createAsset(data);
+      toast.success(editing ? "Asset updated." : "Asset added — it now counts toward your net worth.");
       reset();
       load();
     } catch (err) {
@@ -383,6 +405,7 @@ function AssetsManager() {
     if (!confirm(`Delete “${a.name}”?`)) return;
     try {
       await api.deleteAsset(a.id);
+      toast.success("Asset deleted.");
       if (editing === a.id) reset();
       load();
     } catch (err) {
@@ -391,7 +414,7 @@ function AssetsManager() {
   };
 
   return (
-    <CollapsibleSection title="Other Assets">
+    <CollapsibleSection title="Other Assets" defaultOpen={defaultOpen}>
       <p className="text-glass-3 mb-4 text-xs">
         Property, vehicles, valuables and anything else you own that isn't a bank account. Their value
         is added to your net worth.
@@ -466,7 +489,7 @@ function AssetsManager() {
 const LIABILITY_TYPES = ["loan", "mortgage", "lease", "credit", "other"];
 
 /** Manage debts (loans, mortgages, leases…) that count against net worth. */
-function LiabilitiesManager() {
+function LiabilitiesManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const [items, setItems] = useState<Liability[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -505,6 +528,9 @@ function LiabilitiesManager() {
     try {
       if (editing) await api.updateLiability(editing, data);
       else await api.createLiability(data);
+      toast.success(
+        editing ? "Liability updated." : "Liability added — it's now subtracted from your net worth."
+      );
       reset();
       load();
     } catch (err) {
@@ -526,6 +552,7 @@ function LiabilitiesManager() {
     if (!confirm(`Delete “${l.name}”?`)) return;
     try {
       await api.deleteLiability(l.id);
+      toast.success("Liability deleted.");
       if (editing === l.id) reset();
       load();
     } catch (err) {
@@ -534,7 +561,7 @@ function LiabilitiesManager() {
   };
 
   return (
-    <CollapsibleSection title="Liabilities">
+    <CollapsibleSection title="Liabilities" defaultOpen={defaultOpen}>
       <p className="text-glass-3 mb-4 text-xs">
         Loans, mortgages, leases and other debts. Their outstanding balances are subtracted from your
         net worth.
@@ -772,6 +799,7 @@ function AccountsManager({
       maturityDate: maturityDate || null,
       interestPaid: interestPaid || null,
     });
+    toast.success(`Account “${name.trim()}” added.`);
     setName("");
     setCurrency(baseCurrency);
     setOpeningBalance("0");
@@ -788,8 +816,10 @@ function AccountsManager({
   };
 
   const remove = async (id: string) => {
+    if (!confirm("Delete this account?")) return;
     try {
       await api.deleteAccount(id);
+      toast.success("Account deleted.");
       onChange();
     } catch (err) {
       toast.error((err as Error).message);
@@ -798,6 +828,11 @@ function AccountsManager({
 
   return (
     <CollapsibleSection title="Accounts" defaultOpen>
+      <p className="text-glass-3 mb-4 text-xs">
+        Add each account with the balance it holds <b className="text-glass-2">right now</b> as its
+        opening balance — transactions and transfers you record adjust it from there. The fixed-term
+        fields are only for fixed-rate ISAs and bonds; leave them blank otherwise.
+      </p>
       <ul className="mb-4 divide-y divide-white/10">
         {accounts.map((a) => (
           <AccountRow
@@ -955,6 +990,7 @@ function AccountRow({
       maturityDate: maturityDate || null,
       interestPaid: interestPaid || null,
     });
+    toast.success("Account updated.");
     setEditing(false);
     onChange();
   };
@@ -1408,6 +1444,7 @@ function ValuationForm({
     setBusy(true);
     try {
       await api.createValuation({ accountId, date: new Date(date).toISOString(), value: v, note: note || null });
+      toast.success("Value saved — the balance now starts from this figure.");
       onSaved();
     } finally {
       setBusy(false);
@@ -1456,6 +1493,7 @@ function CategoriesManager({
     if (!name.trim()) return setError("Name is required.");
     try {
       await api.createCategory({ name: name.trim(), type, color });
+      toast.success(`Category “${name.trim()}” added.`);
       setName("");
       onChange();
     } catch (err) {
@@ -1464,8 +1502,10 @@ function CategoriesManager({
   };
 
   const remove = async (id: string) => {
+    if (!confirm("Delete this category?")) return;
     try {
       await api.deleteCategory(id);
+      toast.success("Category deleted.");
       onChange();
     } catch (err) {
       toast.error((err as Error).message);

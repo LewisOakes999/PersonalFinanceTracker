@@ -6,6 +6,7 @@ import type { Account, Goal } from "../types";
 import { Button, Field, Modal, StatTile, Tile } from "../components/ui";
 import { formatDate } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
+import { toast } from "../lib/toast";
 
 export default function Goals() {
   const { format } = useCurrency();
@@ -23,6 +24,7 @@ export default function Goals() {
   const remove = async (id: string) => {
     if (!confirm("Delete this goal?")) return;
     await api.deleteGoal(id);
+    toast.success("Goal deleted.");
     refresh();
   };
 
@@ -49,8 +51,14 @@ export default function Goals() {
       </div>
 
       {goals.length === 0 ? (
-        <Tile className="p-10 text-center text-sm text-glass-3">
-          No goals yet. Add one to start tracking a savings target.
+        <Tile className="flex flex-col items-center gap-4 p-10 text-center">
+          <p className="text-glass-3 text-sm">
+            No goals yet. Set a savings target — like a holiday fund or house deposit — and track
+            your progress toward it, manually or linked to an account's balance.
+          </p>
+          <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditing("new")}>
+            <Plus size={14} strokeWidth={2} /> Add your first goal
+          </Button>
         </Tile>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -72,6 +80,7 @@ export default function Goals() {
           accounts={accounts}
           onClose={() => setEditing(null)}
           onSaved={() => {
+            toast.success(editing === "new" ? "Goal added." : "Goal updated.");
             setEditing(null);
             refresh();
           }}

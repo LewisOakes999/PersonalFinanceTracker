@@ -336,7 +336,9 @@ export default function Forecast() {
               </li>
             ))}
             {data.accounts.length === 0 && (
-              <li className="text-glass-3 py-6 text-center text-sm">No accounts yet.</li>
+              <li className="text-glass-3 py-6 text-center text-sm">
+                No accounts yet — add them in Settings → Accounts to see interest projections.
+              </li>
             )}
           </ul>
         </Tile>

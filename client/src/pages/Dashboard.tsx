@@ -32,6 +32,7 @@ import type {
   Upcoming,
 } from "../types";
 import {
+  Button,
   InvestmentBadge,
   IsaBadge,
   PbBadge,
@@ -101,10 +102,14 @@ const ASSET_ICONS: Record<string, LucideIcon> = {
 };
 
 export default function Dashboard({
-  onAddAccount,
+  onManage,
+  onGoTo,
   onViewAccount,
 }: {
-  onAddAccount?: () => void;
+  /** Open Settings with the given section (accounts | assets | liabilities) expanded. */
+  onManage?: (section: string) => void;
+  /** Navigate to another tab (e.g. "transactions"). */
+  onGoTo?: (tab: string) => void;
   onViewAccount?: (accountId: string) => void;
 }) {
   const { format } = useCurrency();
@@ -115,6 +120,8 @@ export default function Dashboard({
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [insights, setInsights] = useState<SpendingInsights | null>(null);
   const [upcoming, setUpcoming] = useState<Upcoming | null>(null);
+  // null = still checking; false = nothing recorded in the last year → show the guide.
+  const [hasHistory, setHasHistory] = useState<boolean | null>(null);
 
   useEffect(() => {
     const params = periodParams(period);
@@ -127,6 +134,7 @@ export default function Dashboard({
     api.balances().then(setBalances);
     api.insights().then(setInsights);
     api.upcoming(45).then(setUpcoming);
+    api.trend(12).then((t) => setHasHistory(t.some((m) => m.income > 0 || m.expenses > 0)));
   }, []);
 
   const totalSpent = byCategory.reduce((s, c) => s + c.total, 0);
@@ -142,6 +150,60 @@ export default function Dashboard({
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />
       </header>
+
+      {/* First-run guide: shown until the user records any income or expenses. */}
+      {hasHistory === false && (
+        <Tile className="p-6">
+          <h2 className="text-glass text-[17px] font-semibold tracking-tight">
+            Let's set up your finances
+          </h2>
+          <p className="text-glass-3 mt-1 text-[13px]">
+            Three quick steps and this dashboard fills itself in.
+          </p>
+          <ol className="mt-4 space-y-3">
+            {[
+              {
+                n: 1,
+                title: "Add your accounts",
+                desc: "Current, savings, ISA, credit card — with today's balance.",
+                action: onManage && (
+                  <Button variant="primary" onClick={() => onManage("accounts")}>
+                    Add an account
+                  </Button>
+                ),
+              },
+              {
+                n: 2,
+                title: "Record your money in and out",
+                desc: "Add transactions by hand or import a CSV from your bank.",
+                action: onGoTo && (
+                  <Button onClick={() => onGoTo("transactions")}>Go to Transactions</Button>
+                ),
+              },
+              {
+                n: 3,
+                title: "Set a budget or a goal",
+                desc: "Give a category a monthly limit, or set a savings target.",
+                action: onGoTo && <Button onClick={() => onGoTo("budgets")}>Go to Budgets</Button>,
+              },
+            ].map((s) => (
+              <li key={s.n} className="flex flex-wrap items-center gap-3">
+                <span
+                  className="num flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
+                  style={{ background: "linear-gradient(140deg,#0a84ff,#30d5c8)" }}
+                >
+                  {s.n}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-glass block text-[14px] font-medium">{s.title}</span>
+                  <span className="text-glass-3 block text-[12px]">{s.desc}</span>
+                </span>
+                {s.action}
+              </li>
+            ))}
+          </ol>
+        </Tile>
+      )}
 
       {/* Summary tiles */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-4">
@@ -222,7 +284,12 @@ export default function Dashboard({
         <Tile className="p-[22px]">
           <SectionTitle>Recent Transactions</SectionTitle>
           {recent.length === 0 ? (
-            <Empty>No transactions this month.</Empty>
+            <div className="flex flex-col items-center gap-3 py-8">
+              <p className="text-glass-3 text-sm">Nothing recorded for this period yet.</p>
+              {onGoTo && (
+                <Button onClick={() => onGoTo("transactions")}>+ Add a transaction</Button>
+              )}
+            </div>
           ) : (
             <ul>
               {recent.map((t) => {
@@ -362,15 +429,20 @@ export default function Dashboard({
           <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
             Balances by Account
           </h2>
-          {onAddAccount && (
+          {onManage && (
             <button
-              onClick={onAddAccount}
+              onClick={() => onManage("accounts")}
               className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
             >
               + Add account
             </button>
           )}
         </div>
+        {balances && balances.accounts.length === 0 && (
+          <p className="text-glass-3 py-6 text-center text-sm">
+            No accounts yet — add your bank, savings and credit accounts to see balances here.
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           {balances?.accounts.map((a) => {
             const AccountIcon = ACCOUNT_ICONS[a.type] ?? Wallet;
@@ -433,9 +505,9 @@ export default function Dashboard({
             <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
               Other Assets
             </h2>
-            {onAddAccount && (
+            {onManage && (
               <button
-                onClick={onAddAccount}
+                onClick={() => onManage("assets")}
                 className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
               >
                 + Add asset
@@ -482,9 +554,9 @@ export default function Dashboard({
             <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
               Liabilities
             </h2>
-            {onAddAccount && (
+            {onManage && (
               <button
-                onClick={onAddAccount}
+                onClick={() => onManage("liabilities")}
                 className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
               >
                 + Add liability
