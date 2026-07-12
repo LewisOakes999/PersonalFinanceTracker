@@ -5,6 +5,7 @@ import {
   Banknote,
   Briefcase,
   Car,
+  Check,
   Clapperboard,
   CreditCard,
   Fuel,
@@ -18,6 +19,7 @@ import {
   TrendingUp,
   UtensilsCrossed,
   Wallet,
+  X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -43,8 +45,9 @@ import {
 } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { defaultPeriod, periodParams, type Period } from "../lib/period";
-import { formatCurrency, formatDate, nextInterestDate } from "../lib/format";
+import { currentMonth, formatCurrency, formatDate, nextInterestDate } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
+import { useAuth } from "../lib/AuthContext";
 
 const INCOME = "#34e0c4";
 const EXPENSE = "#ff6b8a";
@@ -120,8 +123,18 @@ export default function Dashboard({
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [insights, setInsights] = useState<SpendingInsights | null>(null);
   const [upcoming, setUpcoming] = useState<Upcoming | null>(null);
-  // null = still checking; false = nothing recorded in the last year → show the guide.
+  // Setup-guide progress. null = still checking.
   const [hasHistory, setHasHistory] = useState<boolean | null>(null);
+  const [hasBudgetOrGoal, setHasBudgetOrGoal] = useState<boolean | null>(null);
+  const { user } = useAuth();
+  const guideKey = `ss_guide_hidden_${user?.email ?? ""}`;
+  const [guideDismissed, setGuideDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(guideKey) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const params = periodParams(period);
@@ -135,7 +148,29 @@ export default function Dashboard({
     api.insights().then(setInsights);
     api.upcoming(45).then(setUpcoming);
     api.trend(12).then((t) => setHasHistory(t.some((m) => m.income > 0 || m.expenses > 0)));
+    // For the setup guide's third step: any budget this month, or any goal.
+    Promise.all([
+      api.listBudgets(currentMonth()).catch(() => []),
+      api.listGoals().catch(() => []),
+    ]).then(([b, g]) => setHasBudgetOrGoal(b.length > 0 || g.length > 0));
   }, []);
+
+  // Every new user gets a £0 starter account, so "accounts added" means more
+  // than that: a second account, or a real balance on any account.
+  const step1Done =
+    !!balances && (balances.accounts.length > 1 || balances.accounts.some((a) => a.balance !== 0));
+  const step2Done = hasHistory === true;
+  const step3Done = hasBudgetOrGoal === true;
+  const guideLoaded = balances !== null && hasHistory !== null && hasBudgetOrGoal !== null;
+  const showGuide = guideLoaded && !guideDismissed && !(step1Done && step2Done && step3Done);
+  const dismissGuide = () => {
+    setGuideDismissed(true);
+    try {
+      localStorage.setItem(guideKey, "1");
+    } catch {
+      /* ignore */
+    }
+  };
 
   const totalSpent = byCategory.reduce((s, c) => s + c.total, 0);
   const net = totals?.net ?? 0;
@@ -151,19 +186,30 @@ export default function Dashboard({
         <PeriodSelector value={period} onChange={setPeriod} />
       </header>
 
-      {/* First-run guide: shown until the user records any income or expenses. */}
-      {hasHistory === false && (
-        <Tile className="p-6">
-          <h2 className="text-glass text-[17px] font-semibold tracking-tight">
+      {/* First-run guide: steps tick off as they're completed, and the panel
+          disappears once all are done (or when dismissed with the ✕). */}
+      {showGuide && (
+        <Tile className="relative p-6">
+          <button
+            onClick={dismissGuide}
+            aria-label="Close setup guide"
+            title="Close — you can find everything in the sidebar"
+            className="text-glass-3 hover:text-glass absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+          >
+            <X size={15} strokeWidth={2} />
+          </button>
+          <h2 className="text-glass pr-10 text-[17px] font-semibold tracking-tight">
             Let's set up your finances
           </h2>
           <p className="text-glass-3 mt-1 text-[13px]">
-            Three quick steps and this dashboard fills itself in.
+            Three quick steps and this dashboard fills itself in. This guide disappears once
+            they're all done.
           </p>
           <ol className="mt-4 space-y-3">
             {[
               {
                 n: 1,
+                done: step1Done,
                 title: "Add your accounts",
                 desc: "Current, savings, ISA, credit card — with today's balance.",
                 action: onManage && (
@@ -174,6 +220,7 @@ export default function Dashboard({
               },
               {
                 n: 2,
+                done: step2Done,
                 title: "Record your money in and out",
                 desc: "Add transactions by hand or import a CSV from your bank.",
                 action: onGoTo && (
@@ -182,6 +229,7 @@ export default function Dashboard({
               },
               {
                 n: 3,
+                done: step3Done,
                 title: "Set a budget or a goal",
                 desc: "Give a category a monthly limit, or set a savings target.",
                 action: onGoTo && <Button onClick={() => onGoTo("budgets")}>Go to Budgets</Button>,
@@ -190,15 +238,25 @@ export default function Dashboard({
               <li key={s.n} className="flex flex-wrap items-center gap-3">
                 <span
                   className="num flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
-                  style={{ background: "linear-gradient(140deg,#0a84ff,#30d5c8)" }}
+                  style={{
+                    background: s.done
+                      ? "rgba(52,224,196,0.9)"
+                      : "linear-gradient(140deg,#0a84ff,#30d5c8)",
+                  }}
                 >
-                  {s.n}
+                  {s.done ? <Check size={14} strokeWidth={2.5} /> : s.n}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="text-glass block text-[14px] font-medium">{s.title}</span>
-                  <span className="text-glass-3 block text-[12px]">{s.desc}</span>
+                <span className={`min-w-0 flex-1 ${s.done ? "opacity-55" : ""}`}>
+                  <span
+                    className={`text-glass block text-[14px] font-medium ${s.done ? "line-through" : ""}`}
+                  >
+                    {s.title}
+                  </span>
+                  <span className="text-glass-3 block text-[12px]">
+                    {s.done ? "Done!" : s.desc}
+                  </span>
                 </span>
-                {s.action}
+                {!s.done && s.action}
               </li>
             ))}
           </ol>
