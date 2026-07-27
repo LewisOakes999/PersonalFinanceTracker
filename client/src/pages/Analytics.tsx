@@ -24,6 +24,7 @@ import { SectionTitle, Tile } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { defaultPeriod, periodParams, type Period } from "../lib/period";
 import { formatDate, shortMonthLabel } from "../lib/format";
+import { fittedDomain } from "../lib/chart";
 import { useCurrency } from "../lib/CurrencyContext";
 import { tooltipStyle } from "./Dashboard";
 
@@ -115,6 +116,23 @@ export default function Analytics() {
       {/* Net worth over time */}
       <Tile className="p-[22px]">
         <SectionTitle>Net Worth Over Time (last 12 months)</SectionTitle>
+        {netWorthData.length > 1 &&
+          (() => {
+            const first = netWorthData[0].netWorth;
+            const last = netWorthData[netWorthData.length - 1].netWorth;
+            const diff = last - first;
+            const pct = first !== 0 ? (diff / Math.abs(first)) * 100 : 0;
+            const up = diff >= 0;
+            return (
+              <p className="text-glass-3 -mt-2 mb-3 text-[13px]">
+                <span className="num" style={{ color: up ? INCOME : EXPENSE }}>
+                  {up ? "↑" : "↓"} {format(Math.abs(diff))}
+                  {first !== 0 && ` (${up ? "+" : "−"}${Math.abs(pct).toFixed(1)}%)`}
+                </span>{" "}
+                over the period · now <span className="num text-glass-2">{format(last)}</span>
+              </p>
+            );
+          })()}
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={netWorthData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
@@ -131,6 +149,9 @@ export default function Analytics() {
                 fontSize={12}
                 tickLine={false}
                 width={70}
+                // Fitted, not zero-anchored — net worth sits far from zero, so a
+                // zero baseline would flatten a year of movement into a few pixels.
+                domain={fittedDomain(netWorthData.map((p) => p.netWorth))}
                 tickFormatter={(v: number) => format(v).replace(/\.00$/, "")}
               />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => format(v)} />

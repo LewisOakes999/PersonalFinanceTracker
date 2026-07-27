@@ -15,6 +15,7 @@ import { api } from "../api/client";
 import type { Forecast as ForecastData, IsaAllowance } from "../types";
 import { Field, IsaBadge, PbBadge, SectionTitle, StatTile, Tile } from "../components/ui";
 import { formatMonthLabel, shortMonthLabel } from "../lib/format";
+import { fittedDomain } from "../lib/chart";
 import { useCurrency } from "../lib/CurrencyContext";
 import { tooltipStyle } from "./Dashboard";
 import InvestmentProjection from "./InvestmentProjection";
@@ -224,6 +225,13 @@ export default function Forecast() {
                 fontSize={12}
                 tickLine={false}
                 width={70}
+                // Fitted to the projected values so the trend is legible; these
+                // balances sit far from zero.
+                domain={fittedDomain(
+                  chartData.flatMap((p) =>
+                    showNetWorth ? [p.balance, p.netWorth] : [p.balance]
+                  )
+                )}
                 tickFormatter={(v: number) => format(v).replace(/\.00$/, "")}
               />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [format(v), n]} />
