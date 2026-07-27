@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "../lib/AuthContext";
-import { Bloom, Button, Field } from "./ui";
+import { Button, Field } from "./ui";
 import { BrandTile } from "./BrandMark";
 import { PasswordStrength } from "./PasswordStrength";
 import { passwordValid } from "../lib/password";
@@ -54,7 +54,6 @@ export default function AuthScreen({
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden p-4">
-      <Bloom />
       <div className="glass relative z-[1] w-full max-w-[400px] rounded-panel p-8">
         {onBack && (
           <button

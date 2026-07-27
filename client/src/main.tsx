@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import AuthScreen from "./components/AuthScreen";
 import Landing from "./pages/Landing";
-import { Bloom } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { CurrencyProvider } from "./lib/CurrencyContext";
 import { ToastViewport } from "./components/ToastViewport";
@@ -17,7 +16,6 @@ function Root() {
   if (loading) {
     return (
       <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
-        <Bloom />
         <div className="text-glass-3 relative z-[1] text-sm">Loading…</div>
       </div>
     );

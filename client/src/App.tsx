@@ -168,13 +168,6 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-full overflow-hidden">
-      {/* Color bloom the glass refracts */}
-      <div className="bloom-layer" aria-hidden>
-        <div className="bloom bloom-1" />
-        <div className="bloom bloom-2" />
-        <div className="bloom bloom-3" />
-      </div>
-
       <div className="relative z-[1] grid h-screen grid-cols-1 grid-rows-[auto_1fr] md:grid-cols-[248px_minmax(0,1fr)] md:grid-rows-1">
         {/* Mobile top bar */}
         <div className="flex items-center gap-3 p-4 md:hidden">

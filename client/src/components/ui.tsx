@@ -17,17 +17,6 @@ export const PbBadge = () => <AccountBadge>PB</AccountBadge>;
 export const PensionBadge = () => <AccountBadge>PEN</AccountBadge>;
 export const InvestmentBadge = () => <AccountBadge>INV</AccountBadge>;
 
-/** Decorative background colour-bloom the frosted glass refracts. */
-export function Bloom() {
-  return (
-    <div className="bloom-layer" aria-hidden>
-      <div className="bloom bloom-1" />
-      <div className="bloom bloom-2" />
-      <div className="bloom bloom-3" />
-    </div>
-  );
-}
-
 const MONTH_NAMES = [
   "January",
   "February",

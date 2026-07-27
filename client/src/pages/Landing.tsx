@@ -10,7 +10,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { Bloom, Button, Tile } from "../components/ui";
+import { Button, Tile } from "../components/ui";
 import { BrandTile } from "../components/BrandMark";
 
 // TODO: replace with your own donation link (Buy Me a Coffee, Ko-fi, GitHub
@@ -98,7 +98,6 @@ export default function Landing({
 }) {
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden">
-      <Bloom />
       <div className="relative z-[1] mx-auto max-w-5xl px-5 py-8 sm:py-12">
         {/* Top bar */}
         <header className="mb-12 flex items-center justify-between gap-3 sm:mb-16">
