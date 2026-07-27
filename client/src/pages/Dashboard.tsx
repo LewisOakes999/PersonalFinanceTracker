@@ -140,7 +140,7 @@ export default function Dashboard({
     const params = periodParams(period);
     api.totals(params).then(setTotals);
     api.byCategory(params, "expense").then(setByCategory);
-    api.listTransactions(params).then((t) => setRecent(t.slice(0, 7)));
+    api.listTransactions(params).then((t) => setRecent(t.slice(0, 5)));
   }, [period]);
 
   useEffect(() => {
@@ -388,7 +388,9 @@ export default function Dashboard({
         </Tile>
       </div>
 
-      {/* Upcoming scheduled items + running balance */}
+      {/* Upcoming and insights sit side by side on wide screens to keep the
+          dashboard short. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {upcoming && upcoming.items.length > 0 && (
         <Tile className="p-[22px]">
           <SectionTitle>Upcoming · next {upcoming.days} days</SectionTitle>
@@ -480,185 +482,244 @@ export default function Dashboard({
           </ul>
         </Tile>
       )}
+      </div>
 
-      {/* Balances by account */}
+      {/* Net worth composition — accounts, other assets and debts in one
+          compact panel rather than three tall grids of cards. */}
       <Tile className="p-[22px]">
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
-            Balances by Account
+            Net Worth
           </h2>
-          {onManage && (
-            <button
-              onClick={() => onManage("accounts")}
-              className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
-            >
-              + Add account
-            </button>
+          {balances && (
+            <span className="num text-glass text-[15px] font-semibold">
+              {format(balances.netWorth ?? balances.overall ?? 0)}
+            </span>
           )}
         </div>
-        {balances && balances.accounts.length === 0 && (
-          <p className="text-glass-3 py-6 text-center text-sm">
-            No accounts yet — add your bank, savings and credit accounts to see balances here.
-          </p>
-        )}
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-          {balances?.accounts.map((a) => {
-            const AccountIcon = ACCOUNT_ICONS[a.type] ?? Wallet;
-            return (
-            <Tile
-              key={a.id}
-              nested
-              rounded="rounded-tile"
-              className="p-[18px] transition-colors hover:bg-white/[0.06]"
-              onClick={onViewAccount ? () => onViewAccount(a.id) : undefined}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="truncate text-[14px] font-medium text-glass">{a.name}</div>
-                  {a.isIsa && <IsaBadge />}
-                  {a.isPremiumBonds && <PbBadge />}
-                  {a.isInvestment && <InvestmentBadge />}
-                  {a.isPension && <PensionBadge />}
-                </div>
-                <div
-                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-glass-2"
-                  style={{ background: tint("#0a84ff", 0.18) }}
-                >
-                  <AccountIcon size={13} strokeWidth={1.75} />
-                </div>
-              </div>
-              <div className="text-glass-3 mt-0.5 text-[11px] uppercase tracking-[0.06em]">
-                {a.type}
-                {a.interestRate > 0 && ` · ${a.interestRate.toFixed(2)}% AER`}
-              </div>
-              <div
-                className="num mt-3 text-[22px] font-semibold tracking-tight"
-                style={{ color: a.balance < 0 ? EXPENSE : "var(--lg-text)" }}
-              >
-                {a.balance < 0 ? "−" : ""}
-                {formatCurrency(Math.abs(a.balance), a.currency)}
-              </div>
-              {balances && a.currency !== balances.baseCurrency && (
-                <div className="num text-glass-3 mt-0.5 text-[11px]">
-                  ≈ {format(a.baseBalance)}
-                </div>
-              )}
-              {a.maturityDate && (
-                <div className="text-glass-3 mt-1 text-[11px]">
-                  {nextInterestDate(a)
-                    ? `Interest ${formatDate(nextInterestDate(a)!)}`
-                    : `Matures ${formatDate(a.maturityDate)}`}
-                </div>
-              )}
-            </Tile>
-            );
-          })}
+
+        <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-3">
+          {/* Accounts */}
+          <NetWorthColumn
+            title="Accounts"
+            total={balances ? format(balances.accountsTotal ?? balances.overall ?? 0) : ""}
+            onAdd={onManage ? () => onManage("accounts") : undefined}
+            addLabel="+ Add account"
+            empty={
+              balances && balances.accounts.length === 0
+                ? "No accounts yet — add your bank, savings and credit accounts."
+                : undefined
+            }
+          >
+            {balances?.accounts.map((a) => (
+              <NetWorthRow
+                key={a.id}
+                icon={ACCOUNT_ICONS[a.type] ?? Wallet}
+                iconTint={tint("#0a84ff", 0.18)}
+                name={a.name}
+                title={[
+                  a.type,
+                  a.interestRate > 0 ? `${a.interestRate.toFixed(2)}% AER` : null,
+                  a.maturityDate
+                    ? nextInterestDate(a)
+                      ? `interest ${formatDate(nextInterestDate(a)!)}`
+                      : `matures ${formatDate(a.maturityDate)}`
+                    : null,
+                  balances && a.currency !== balances.baseCurrency
+                    ? `≈ ${format(a.baseBalance)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                badges={
+                  <>
+                    {a.isIsa && <IsaBadge />}
+                    {a.isPremiumBonds && <PbBadge />}
+                    {a.isInvestment && <InvestmentBadge />}
+                    {a.isPension && <PensionBadge />}
+                  </>
+                }
+                amount={`${a.balance < 0 ? "−" : ""}${formatCurrency(Math.abs(a.balance), a.currency)}`}
+                amountColor={a.balance < 0 ? EXPENSE : undefined}
+                onClick={onViewAccount ? () => onViewAccount(a.id) : undefined}
+              />
+            ))}
+          </NetWorthColumn>
+
+          {/* Other assets */}
+          <NetWorthColumn
+            title="Other assets"
+            total={balances ? format(balances.otherAssetsTotal ?? 0) : ""}
+            onAdd={onManage ? () => onManage("assets") : undefined}
+            addLabel="+ Add asset"
+            empty={
+              balances && (balances.otherAssets?.length ?? 0) === 0
+                ? "Property, vehicles and valuables you own."
+                : undefined
+            }
+          >
+            {balances?.otherAssets?.map((a) => (
+              <NetWorthRow
+                key={a.id}
+                icon={ASSET_ICONS[a.type] ?? Wallet}
+                iconTint={tint(INCOME, 0.18)}
+                name={a.name}
+                title={[
+                  a.type,
+                  balances && a.currency !== balances.baseCurrency
+                    ? `≈ ${format(a.baseValue)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                amount={formatCurrency(a.value, a.currency)}
+              />
+            ))}
+          </NetWorthColumn>
+
+          {/* Liabilities */}
+          <NetWorthColumn
+            title="Owed"
+            total={balances ? `−${format(balances.liabilitiesTotal ?? 0)}` : ""}
+            totalColor={EXPENSE}
+            onAdd={onManage ? () => onManage("liabilities") : undefined}
+            addLabel="+ Add liability"
+            empty={
+              balances && (balances.liabilities?.length ?? 0) === 0
+                ? "Loans, mortgages and other debts."
+                : undefined
+            }
+          >
+            {balances?.liabilities?.map((l) => (
+              <NetWorthRow
+                key={l.id}
+                icon={LIABILITY_ICONS[l.type] ?? Banknote}
+                iconTint={tint(EXPENSE, 0.18)}
+                name={l.name}
+                title={[
+                  l.type,
+                  l.interestRate > 0 ? `${l.interestRate.toFixed(2)}%` : null,
+                  l.monthlyPayment > 0
+                    ? `${formatCurrency(l.monthlyPayment, l.currency)}/mo`
+                    : null,
+                  balances && l.currency !== balances.baseCurrency
+                    ? `≈ ${format(l.baseBalance)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                amount={`−${formatCurrency(l.balance, l.currency)}`}
+                amountColor={EXPENSE}
+              />
+            ))}
+          </NetWorthColumn>
         </div>
       </Tile>
+    </div>
+  );
+}
 
-      {/* Other assets */}
-      {balances && (balances.otherAssets?.length ?? 0) > 0 && (
-        <Tile className="p-[22px]">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
-              Other Assets
-            </h2>
-            {onManage && (
-              <button
-                onClick={() => onManage("assets")}
-                className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
-              >
-                + Add asset
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-            {balances.otherAssets.map((a) => {
-              const AssetIcon = ASSET_ICONS[a.type] ?? Wallet;
-              return (
-                <Tile key={a.id} nested rounded="rounded-tile" className="p-[18px]">
-                  <div className="flex items-center justify-between">
-                    <div className="truncate text-[14px] font-medium text-glass">{a.name}</div>
-                    <div
-                      className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-glass-2"
-                      style={{ background: tint(INCOME, 0.18) }}
-                    >
-                      <AssetIcon size={13} strokeWidth={1.75} />
-                    </div>
-                  </div>
-                  <div className="text-glass-3 mt-0.5 text-[11px] uppercase tracking-[0.06em]">
-                    {a.type}
-                  </div>
-                  <div
-                    className="num mt-3 text-[22px] font-semibold tracking-tight"
-                    style={{ color: "var(--lg-text)" }}
-                  >
-                    {formatCurrency(a.value, a.currency)}
-                  </div>
-                  {balances && a.currency !== balances.baseCurrency && (
-                    <div className="num text-glass-3 mt-0.5 text-[11px]">≈ {format(a.baseValue)}</div>
-                  )}
-                </Tile>
-              );
-            })}
-          </div>
-        </Tile>
+/** One column of the net-worth breakdown: heading, subtotal, add link, rows. */
+function NetWorthColumn({
+  title,
+  total,
+  totalColor,
+  onAdd,
+  addLabel,
+  empty,
+  children,
+}: {
+  title: string;
+  total: string;
+  totalColor?: string;
+  onAdd?: () => void;
+  addLabel: string;
+  empty?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2 border-b border-white/10 pb-1.5">
+        <span className="text-glass-3 text-[11px] font-semibold uppercase tracking-[0.06em]">
+          {title}
+        </span>
+        <span className="num text-[12px]" style={{ color: totalColor ?? "var(--lg-text-2)" }}>
+          {total}
+        </span>
+      </div>
+      {empty ? (
+        <p className="text-glass-3 py-2 text-[12px]">{empty}</p>
+      ) : (
+        <div>{children}</div>
       )}
+      {onAdd && (
+        <button
+          onClick={onAdd}
+          className="text-glass-3 hover:text-glass mt-1.5 text-[12px] transition-colors"
+        >
+          {addLabel}
+        </button>
+      )}
+    </div>
+  );
+}
 
-      {/* Liabilities */}
-      {balances && (balances.liabilities?.length ?? 0) > 0 && (
-        <Tile className="p-[22px]">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
-              Liabilities
-            </h2>
-            {onManage && (
-              <button
-                onClick={() => onManage("liabilities")}
-                className="text-glass-2 hover:text-glass glass-nested rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-white/10"
-              >
-                + Add liability
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-            {balances.liabilities.map((l) => {
-              const LiabilityIcon = LIABILITY_ICONS[l.type] ?? Banknote;
-              return (
-                <Tile key={l.id} nested rounded="rounded-tile" className="p-[18px]">
-                  <div className="flex items-center justify-between">
-                    <div className="truncate text-[14px] font-medium text-glass">{l.name}</div>
-                    <div
-                      className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-glass-2"
-                      style={{ background: tint(EXPENSE, 0.18) }}
-                    >
-                      <LiabilityIcon size={13} strokeWidth={1.75} />
-                    </div>
-                  </div>
-                  <div className="text-glass-3 mt-0.5 text-[11px] uppercase tracking-[0.06em]">
-                    {l.type}
-                    {l.interestRate > 0 && ` · ${l.interestRate.toFixed(2)}%`}
-                  </div>
-                  <div
-                    className="num mt-3 text-[22px] font-semibold tracking-tight"
-                    style={{ color: EXPENSE }}
-                  >
-                    −{formatCurrency(l.balance, l.currency)}
-                  </div>
-                  {l.monthlyPayment > 0 && (
-                    <div className="num text-glass-3 mt-0.5 text-[11px]">
-                      {formatCurrency(l.monthlyPayment, l.currency)}/mo
-                    </div>
-                  )}
-                  {balances && l.currency !== balances.baseCurrency && (
-                    <div className="num text-glass-3 mt-0.5 text-[11px]">≈ {format(l.baseBalance)}</div>
-                  )}
-                </Tile>
-              );
-            })}
-          </div>
-        </Tile>
-      )}
+/** A single dense line: icon, name, badges … amount. Details live in the tooltip. */
+function NetWorthRow({
+  icon: Icon,
+  iconTint,
+  name,
+  title,
+  badges,
+  amount,
+  amountColor,
+  onClick,
+}: {
+  icon: LucideIcon;
+  iconTint: string;
+  name: string;
+  title?: string;
+  badges?: ReactNode;
+  amount: string;
+  amountColor?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      title={title || undefined}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={`-mx-1.5 flex items-center justify-between gap-2 rounded-md px-1.5 py-[5px] ${
+        onClick ? "cursor-pointer transition-colors hover:bg-white/[0.06]" : ""
+      }`}
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span
+          className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] text-glass-2"
+          style={{ background: iconTint }}
+        >
+          <Icon size={10} strokeWidth={2} />
+        </span>
+        <span className="truncate text-[13px] text-glass">{name}</span>
+        {badges}
+      </span>
+      <span
+        className="num shrink-0 text-[13px] font-medium"
+        style={{ color: amountColor ?? "var(--lg-text)" }}
+      >
+        {amount}
+      </span>
     </div>
   );
 }
