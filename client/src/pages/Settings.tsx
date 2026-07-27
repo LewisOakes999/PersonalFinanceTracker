@@ -40,6 +40,7 @@ import {
 import { RISK_PROFILES, matchProfile, riskHint } from "../lib/riskProfiles";
 import { useCurrency } from "../lib/CurrencyContext";
 import { applyTheme, getTheme, type Theme } from "../lib/theme";
+import { canDepreciate, ratePercent } from "../lib/depreciation";
 import { useAuth } from "../lib/AuthContext";
 import { toast } from "../lib/toast";
 import { passwordValid } from "../lib/password";
@@ -439,6 +440,7 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const [type, setType] = useState("property");
   const [currency, setCurrency] = useState("GBP");
   const [value, setValue] = useState("");
+  const [depreciates, setDepreciates] = useState(false);
 
   const load = () => api.listAssets().then(setItems);
   useEffect(() => {
@@ -451,12 +453,20 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
     setType("property");
     setCurrency("GBP");
     setValue("");
+    setDepreciates(false);
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const data = { name: name.trim(), type, currency, value: Number(value) || 0 };
+    const data = {
+      name: name.trim(),
+      type,
+      currency,
+      value: Number(value) || 0,
+      // Only meaningful for types that actually depreciate.
+      depreciates: canDepreciate(type) ? depreciates : false,
+    };
     try {
       if (editing) await api.updateAsset(editing, data);
       else await api.createAsset(data);
@@ -474,6 +484,7 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
     setType(a.type);
     setCurrency(a.currency);
     setValue(String(a.value));
+    setDepreciates(a.depreciates);
   };
 
   const remove = async (a: Asset) => {
@@ -492,7 +503,8 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
     <CollapsibleSection title="Other Assets" defaultOpen={defaultOpen}>
       <p className="text-glass-3 mb-4 text-xs">
         Property, vehicles, valuables and anything else you own that isn't a bank account. Their value
-        is added to your net worth.
+        is added to your net worth. Enter what each is worth <b className="text-glass-2">today</b> —
+        if you tick depreciation, it's written down from here.
       </p>
       {items.length > 0 ? (
         <ul className="mb-4 divide-y divide-white/10">
@@ -503,7 +515,14 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
                 <span className="text-glass-3 text-xs uppercase tracking-wide">{a.type}</span>
               </div>
               <div className="flex items-center gap-3">
-                <span className="num text-glass-2 text-[13px]">{formatCurrency(a.value, a.currency)}</span>
+                <span className="num text-glass-2 text-[13px]">
+                  {formatCurrency(a.currentValue ?? a.value, a.currency)}
+                  {a.depreciates && (a.currentValue ?? a.value) < a.value && (
+                    <span className="text-glass-3 ml-1.5 text-[11px]">
+                      was {formatCurrency(a.value, a.currency)}
+                    </span>
+                  )}
+                </span>
                 <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => edit(a)}>
                   edit
                 </button>
@@ -539,7 +558,7 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
             ))}
           </select>
         </Field>
-        <Field label="Value">
+        <Field label="Value today">
           <input
             type="number"
             step="0.01"
@@ -548,6 +567,26 @@ function AssetsManager({ defaultOpen = false }: { defaultOpen?: boolean }) {
             onChange={(e) => setValue(e.target.value)}
           />
         </Field>
+        {canDepreciate(type) ? (
+          <label
+            className="flex items-center gap-2 pb-2 text-sm text-glass"
+            title={`Set automatically for ${type}, so the write-down stays realistic.`}
+          >
+            <input
+              type="checkbox"
+              checked={depreciates}
+              onChange={(e) => setDepreciates(e.target.checked)}
+            />
+            Depreciate
+            <span className="text-glass-3 text-xs">({ratePercent(type)})</span>
+          </label>
+        ) : (
+          <span className="text-glass-3 pb-2.5 text-xs">
+            {type === "property"
+              ? "Property isn't depreciated — update its value when the market moves."
+              : "This type doesn't depreciate."}
+          </span>
+        )}
         <Button type="submit" variant="primary">
           {editing ? "Update" : "Add"} Asset
         </Button>

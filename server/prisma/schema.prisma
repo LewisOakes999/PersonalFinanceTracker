@@ -50,15 +50,17 @@ model CategoryRule {
 }
 
 model Asset {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  type      String // property | vehicle | valuables | cash | other
-  currency  String   @default("GBP")
-  value     Decimal  @default(0) @db.Decimal(14, 2) // current worth
-  note      String?
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  type         String // property | vehicle | valuables | cash | other
+  currency     String    @default("GBP")
+  value        Decimal   @default(0) @db.Decimal(14, 2) // worth as at `valueDate`
+  depreciates  Boolean   @default(false) // write the value down over time
+  valueDate    DateTime? // when `value` was accurate; depreciation runs from here
+  note         String?
+  createdAt    DateTime  @default(now())
 
   @@index([userId])
 }

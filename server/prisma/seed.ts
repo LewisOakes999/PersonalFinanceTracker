@@ -144,10 +144,21 @@ async function main() {
   });
 
   console.log("Creating other assets...");
+  const twoYearsAgo = new Date();
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
   await prisma.asset.createMany({
     data: [
+      // Property isn't depreciated — its value tracks the market instead.
       { userId, name: "Home", type: "property", value: 315000 },
-      { userId, name: "Car (VW Golf)", type: "vehicle", value: 14500 },
+      // A car bought two years ago, written down at the vehicle rate.
+      {
+        userId,
+        name: "Car (VW Golf)",
+        type: "vehicle",
+        value: 14500,
+        depreciates: true,
+        valueDate: twoYearsAgo,
+      },
     ],
   });
 

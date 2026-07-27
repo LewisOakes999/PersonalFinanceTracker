@@ -8,6 +8,7 @@ import { monteCarlo } from "../lib/montecarlo.js";
 import { resolveRange } from "../lib/range.js";
 import { getConversion } from "../lib/currency.js";
 import { advance } from "../lib/recurfreq.js";
+import { depreciatedValue, depreciationRate } from "../lib/depreciation.js";
 
 export const summaryRouter = Router();
 
@@ -101,13 +102,24 @@ summaryRouter.get(
     });
 
     const otherAssets = assetRows.map((a) => {
-      const value = toNumber(a.value);
+      const stated = toNumber(a.value);
+      // Depreciating assets count at their written-down value, so net worth
+      // doesn't drift upward as a car ages.
+      const value = depreciatedValue({
+        value: stated,
+        type: a.type,
+        depreciates: a.depreciates,
+        from: a.valueDate,
+      });
       return {
         id: a.id,
         name: a.name,
         type: a.type,
         currency: a.currency,
         note: a.note,
+        depreciates: a.depreciates,
+        depreciationRate: depreciationRate(a.type),
+        statedValue: stated,
         value,
         baseValue: round2(conv.toBase(value, a.currency)),
       };
@@ -280,8 +292,21 @@ summaryRouter.get(
     const monthlyRate = (annualPct: number) => Math.pow(1 + annualPct / 100, 1 / 12) - 1;
     const rateById = new Map(accounts.map((a) => [a.id, monthlyRate(toNumber(a.interestRate))]));
 
-    // Other assets are treated as constant over the horizon.
-    const otherAssetsTotal = Math.round(assetRows.reduce((s, a) => s + toNumber(a.value), 0) * 100) / 100;
+    // Other assets: non-depreciating ones hold their value over the horizon;
+    // depreciating ones are written down month by month, so projected net worth
+    // reflects a car losing value rather than holding it forever.
+    const assetState = assetRows.map((a) => ({
+      value: depreciatedValue({
+        value: toNumber(a.value),
+        type: a.type,
+        depreciates: a.depreciates,
+        from: a.valueDate,
+      }),
+      monthlyFactor: a.depreciates ? Math.pow(1 - depreciationRate(a.type), 1 / 12) : 1,
+    }));
+    const assetsTotalNow = () =>
+      Math.round(assetState.reduce((s, a) => s + a.value, 0) * 100) / 100;
+    const otherAssetsTotal = assetsTotalNow();
 
     // Project each liability's paydown: interest accrues, the monthly payment
     // reduces the balance (floored at zero). Payments are assumed to be part of
@@ -345,6 +370,10 @@ summaryRouter.get(
       }
       const liabilitiesRemaining = liabTotal();
 
+      // …and write down any depreciating assets for the same month.
+      for (const a of assetState) a.value *= a.monthlyFactor;
+      const assetsRemaining = assetsTotalNow();
+
       rows.push({
         month: label,
         income: monthlyIncome,
@@ -354,7 +383,7 @@ summaryRouter.get(
         net: Math.round((surplus + interest) * 100) / 100,
         balance: Math.round(total * 100) / 100,
         liabilities: liabilitiesRemaining,
-        netWorth: Math.round((total + otherAssetsTotal - liabilitiesRemaining) * 100) / 100,
+        netWorth: Math.round((total + assetsRemaining - liabilitiesRemaining) * 100) / 100,
       });
     }
 
@@ -378,10 +407,11 @@ summaryRouter.get(
       startingBalance: round2f(startingBalance),
       endingBalance,
       otherAssets: otherAssetsTotal,
+      endingOtherAssets: assetsTotalNow(),
       startingLiabilities,
       endingLiabilities,
       startingNetWorth: round2f(startingBalance + otherAssetsTotal - startingLiabilities),
-      endingNetWorth: round2f(endingBalance + otherAssetsTotal - endingLiabilities),
+      endingNetWorth: round2f(endingBalance + assetsTotalNow() - endingLiabilities),
       accounts: accounts.map((a) => ({
         id: a.id,
         name: a.name,
@@ -428,7 +458,10 @@ summaryRouter.get(
     const [accounts, liabilityRows, assetRows, conv] = await Promise.all([
       prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
       prisma.liability.findMany({ where: { userId }, select: { balance: true, currency: true } }),
-      prisma.asset.findMany({ where: { userId }, select: { value: true, currency: true } }),
+      prisma.asset.findMany({
+        where: { userId },
+        select: { value: true, currency: true, type: true, depreciates: true, valueDate: true },
+      }),
       getConversion(userId),
     ]);
     const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
@@ -440,7 +473,17 @@ summaryRouter.get(
       0
     );
     const otherAssetsTotal = assetRows.reduce(
-      (sum, a) => sum + conv.toBase(toNumber(a.value), a.currency),
+      (sum, a) =>
+        sum +
+        conv.toBase(
+          depreciatedValue({
+            value: toNumber(a.value),
+            type: a.type,
+            depreciates: a.depreciates,
+            from: a.valueDate,
+          }),
+          a.currency
+        ),
       0
     );
     const offset = otherAssetsTotal - liabilitiesTotal;

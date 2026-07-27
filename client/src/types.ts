@@ -337,13 +337,20 @@ export interface Asset {
   name: string;
   type: string; // property | vehicle | valuables | cash | other
   currency: string;
-  value: number;
+  value: number; // worth as at valueDate
+  depreciates: boolean;
+  valueDate?: string | null;
+  /** Annual reducing-balance rate for this type — derived, never user-set. */
+  depreciationRate?: number;
+  /** Written-down value today. */
+  currentValue?: number;
   note: string | null;
   createdAt?: string;
 }
 
 export interface AssetBalance extends Asset {
-  baseValue: number; // worth, in the base currency
+  statedValue: number; // what the user entered, before depreciation
+  baseValue: number; // written-down worth, in the base currency
 }
 
 export interface Balances {
