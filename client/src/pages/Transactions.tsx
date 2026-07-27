@@ -6,6 +6,7 @@ import type {
   Account,
   Attachment,
   Category,
+  ExchangeRate,
   RecurFrequency,
   Recurring,
   RecurringTransfer,
@@ -25,6 +26,8 @@ type TypeFilter = "" | TxnType | "transfer";
 type FeedRow = { kind: "txn"; t: Transaction } | { kind: "xfer"; t: Transfer };
 
 const SKY = "#64d2ff";
+const INCOME = "#34e0c4";
+const EXPENSE = "#ff6b8a";
 
 function matchesTransfer(tr: Transfer, query: string): boolean {
   const q = query.toLowerCase();
@@ -39,11 +42,12 @@ function matchesTransfer(tr: Transfer, query: string): boolean {
 export default function Transactions({
   initialAccountId,
 }: { initialAccountId?: string } = {}) {
-  const { format } = useCurrency();
+  const { format, currency } = useCurrency();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [rates, setRates] = useState<ExchangeRate[]>([]);
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
@@ -73,6 +77,8 @@ export default function Transactions({
   useEffect(() => {
     api.listCategories().then(setCategories);
     api.listAccounts().then(setAccounts);
+    // Needed to total accounts held in other currencies correctly.
+    api.listRates().then(setRates).catch(() => setRates([]));
   }, []);
 
   useEffect(refresh, [search, typeFilter, categoryFilter, accountFilter, period, sort, order]);
@@ -117,6 +123,35 @@ export default function Transactions({
     });
     return rows;
   }, [transactions, transfers, typeFilter, categoryFilter, accountFilter, tagFilter, search, sort, order]);
+
+  // Totals for exactly what's on screen, so they track every filter. Amounts
+  // are converted to the base currency (a rate of 1 is assumed where none is
+  // set, matching the server). Transfers move money between your own accounts,
+  // so they're counted but excluded from income/expenses.
+  const totals = useMemo(() => {
+    const rateOf = (code: string) =>
+      code === currency ? 1 : rates.find((r) => r.currency === code)?.rate ?? 1;
+    let income = 0;
+    let expenses = 0;
+    let transferCount = 0;
+    for (const row of feed) {
+      if (row.kind === "xfer") {
+        transferCount++;
+        continue;
+      }
+      const inBase = row.t.amount * rateOf(row.t.account.currency);
+      if (row.t.type === "income") income += inBase;
+      else expenses += inBase;
+    }
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      income: round2(income),
+      expenses: round2(expenses),
+      net: round2(income - expenses),
+      txnCount: feed.length - transferCount,
+      transferCount,
+    };
+  }, [feed, rates, currency]);
 
   const toggleSort = (field: SortField) => {
     if (sort === field) setOrder(order === "asc" ? "desc" : "asc");
@@ -279,6 +314,45 @@ export default function Transactions({
         <Field label="Period">
           <PeriodSelector value={period} onChange={setPeriod} allowAll />
         </Field>
+      </Tile>
+
+      {/* Totals for the current view — updates with every filter. */}
+      <Tile className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-[18px] py-3">
+        <span className="text-glass-3 text-[13px]">
+          Showing <span className="num text-glass-2">{totals.txnCount}</span> transaction
+          {totals.txnCount === 1 ? "" : "s"}
+          {totals.transferCount > 0 && (
+            <>
+              {" "}
+              · <span className="num text-glass-2">{totals.transferCount}</span> transfer
+              {totals.transferCount === 1 ? "" : "s"}
+            </>
+          )}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
+          <span className="text-glass-3">
+            Income{" "}
+            <span className="num font-medium" style={{ color: INCOME }}>
+              {format(totals.income)}
+            </span>
+          </span>
+          <span className="text-glass-3">
+            Expenses{" "}
+            <span className="num font-medium" style={{ color: EXPENSE }}>
+              {format(totals.expenses)}
+            </span>
+          </span>
+          <span className="text-glass-3">
+            Net{" "}
+            <span
+              className="num font-semibold"
+              style={{ color: totals.net >= 0 ? INCOME : EXPENSE }}
+            >
+              {totals.net >= 0 ? "+" : "−"}
+              {format(Math.abs(totals.net))}
+            </span>
+          </span>
+        </span>
       </Tile>
 
       {/* Table */}
@@ -445,9 +519,6 @@ export default function Transactions({
         </table>
       </Tile>
 
-      <div className="num text-xs text-glass-3">
-        {transactions.length} transactions · {transfers.length} transfers
-      </div>
 
       {editing && (
         <TransactionForm
