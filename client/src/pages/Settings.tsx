@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import {
+  ShieldCheck,
+  SlidersHorizontal,
+  Tags,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { api } from "../api/client";
 import type {
   Account,
@@ -144,6 +151,21 @@ function TermFields({
   );
 }
 
+type SettingsTab = "accounts" | "categories" | "preferences" | "data";
+
+const SETTINGS_TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
+  { id: "accounts", label: "Accounts", icon: Wallet },
+  { id: "categories", label: "Categories", icon: Tags },
+  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
+  { id: "data", label: "Security & Data", icon: ShieldCheck },
+];
+
+/** Which tab holds a section the user was sent to from elsewhere. */
+function tabForSection(section?: string | null): SettingsTab {
+  if (section === "assets" || section === "liabilities" || section === "accounts") return "accounts";
+  return "accounts";
+}
+
 export default function Settings({
   focusSection,
   onReplayTour,
@@ -164,50 +186,100 @@ export default function Settings({
     loadCategories();
   }, []);
 
+  // Grouped into a few tabs so the page shows a handful of related panels
+  // instead of one long list of every section at once.
+  const [tab, setTab] = useState<SettingsTab>(() => tabForSection(focusSection));
+  useEffect(() => {
+    if (focusSection) setTab(tabForSection(focusSection));
+  }, [focusSection]);
+
+  const blurb: Record<SettingsTab, string> = {
+    accounts: "What you own and owe — the basis of your net worth",
+    categories: "How your spending is labelled and auto-sorted",
+    preferences: "Currency and how the app looks",
+    data: "Your login details and a full copy of your data",
+  };
+
   return (
     <div className="space-y-4">
-      <header className="mb-6">
+      <header className="mb-5">
         <h1 className="text-[26px] font-semibold tracking-tight text-glass">Settings</h1>
-        <p className="text-glass-3 mt-1 text-[13px]">Accounts, categories and display currency</p>
+        <p className="text-glass-3 mt-1 text-[13px]">{blurb[tab]}</p>
       </header>
 
-      {/* Currency */}
-      <CollapsibleSection title="Base Currency">
-        <div className="flex items-center gap-3">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <span className="num text-sm text-glass-3">Example: {format(1234.5)}</span>
-        </div>
-        <p className="mt-2 text-xs text-glass-3">
-          The currency totals and net worth are shown in. Accounts in other currencies are converted
-          using the exchange rates below.
-        </p>
-      </CollapsibleSection>
+      {/* Tab bar */}
+      <div className="flex flex-wrap gap-2" role="tablist">
+        {SETTINGS_TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(t.id)}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "border-[rgba(10,132,255,0.5)] bg-[rgba(10,132,255,0.18)] text-white"
+                  : "border-white/10 bg-white/5 text-glass-2 hover:bg-white/10 hover:text-glass"
+              }`}
+            >
+              <t.icon size={14} strokeWidth={2} />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <AppearanceManager />
-      <RatesManager accounts={accounts} baseCurrency={currency} />
-      <SecurityManager />
-      <BackupManager />
-      <AccountsManager accounts={accounts} onChange={loadAccounts} format={format} />
-      <AssetsManager defaultOpen={focusSection === "assets"} />
-      <LiabilitiesManager defaultOpen={focusSection === "liabilities"} />
-      <ValuationsManager accounts={accounts} format={format} />
-      <CategoriesManager categories={categories} onChange={loadCategories} />
-      <CategoryRulesManager categories={categories} />
+      {tab === "accounts" && (
+        <>
+          <AccountsManager accounts={accounts} onChange={loadAccounts} format={format} />
+          <AssetsManager defaultOpen={focusSection === "assets"} />
+          <LiabilitiesManager defaultOpen={focusSection === "liabilities"} />
+          <ValuationsManager accounts={accounts} format={format} />
+        </>
+      )}
+
+      {tab === "categories" && (
+        <CategoriesManager categories={categories} onChange={loadCategories} />
+      )}
+
+      {tab === "preferences" && (
+        <>
+          <CollapsibleSection title="Currency" defaultOpen>
+            <div className="flex items-center gap-3">
+              <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <span className="num text-sm text-glass-3">Example: {format(1234.5)}</span>
+            </div>
+            <p className="mt-2 text-xs text-glass-3">
+              Totals and net worth are shown in this currency. Accounts held in another currency are
+              converted using the exchange rates below.
+            </p>
+            <RatesManager accounts={accounts} baseCurrency={currency} />
+          </CollapsibleSection>
+          <AppearanceManager />
+        </>
+      )}
+
+      {tab === "data" && (
+        <>
+          <SecurityManager />
+          <BackupManager />
+        </>
+      )}
 
       {onReplayTour && (
-        <CollapsibleSection title="Help">
-          <p className="text-glass-3 mb-3 text-xs">
-            New here, or want a refresher? Replay the guided tour that walks through adding
-            accounts, recording transactions and setting budgets.
-          </p>
-          <Button onClick={onReplayTour}>Replay the welcome tour</Button>
-        </CollapsibleSection>
+        <p className="text-glass-3 pt-2 text-xs">
+          New here?{" "}
+          <button onClick={onReplayTour} className="text-[#64d2ff] hover:underline">
+            Replay the welcome tour
+          </button>
+        </p>
       )}
     </div>
   );
@@ -262,7 +334,10 @@ function CategoryRulesManager({ categories }: { categories: Category[] }) {
   };
 
   return (
-    <CollapsibleSection title="Category Rules">
+    <div className="mt-6 border-t border-white/10 pt-5">
+      <div className="text-glass-2 mb-2 text-[12px] font-semibold uppercase tracking-[0.06em]">
+        Auto-categorisation rules
+      </div>
       <p className="text-glass-3 mb-4 text-xs">
         Automatically categorise transactions whose description contains a keyword. Applied to CSV
         imports that don't specify a category, and to existing transactions on demand.
@@ -319,7 +394,7 @@ function CategoryRulesManager({ categories }: { categories: Category[] }) {
           </label>
         </div>
       )}
-    </CollapsibleSection>
+    </div>
   );
 }
 
@@ -330,7 +405,7 @@ function AppearanceManager() {
     applyTheme(t);
   };
   return (
-    <CollapsibleSection title="Appearance">
+    <CollapsibleSection title="Appearance" defaultOpen>
       <p className="text-glass-3 mb-3 text-xs">
         Choose a colour theme. Applies instantly and is remembered on this device.
       </p>
@@ -702,7 +777,7 @@ function SecurityManager() {
   };
 
   return (
-    <CollapsibleSection title="Security">
+    <CollapsibleSection title="Security" defaultOpen>
       <form onSubmit={submit} className="max-w-md space-y-4">
         <Field label="Email">
           <input
@@ -1193,10 +1268,13 @@ function RatesManager({
   if (usedCurrencies.length === 0 && rates.length === 0) return null;
 
   return (
-    <CollapsibleSection title="Exchange Rates">
+    <div className="mt-5 border-t border-white/10 pt-4">
+      <div className="text-glass-2 mb-2 text-[12px] font-semibold uppercase tracking-[0.06em]">
+        Exchange rates
+      </div>
       <p className="text-glass-3 mb-3 text-xs">
-        Value of 1 unit of each currency in {baseCurrency}. Used to convert other-currency accounts
-        into your base currency. Currencies without a rate are assumed 1:1.
+        Value of 1 unit of each currency in {baseCurrency}. Currencies without a rate are assumed
+        1:1.
       </p>
       <div className="mb-3">
         <Button onClick={refreshLive} disabled={refreshing}>
@@ -1268,7 +1346,7 @@ function RatesManager({
           Set Rate
         </Button>
       </div>
-    </CollapsibleSection>
+    </div>
   );
 }
 
@@ -1300,7 +1378,7 @@ function BackupManager() {
   };
 
   return (
-    <CollapsibleSection title="Backup & Restore">
+    <CollapsibleSection title="Backup & Restore" defaultOpen>
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={() =>
@@ -1521,7 +1599,7 @@ function CategoriesManager({
   const expense = categories.filter((c) => c.type === "expense");
 
   return (
-    <CollapsibleSection title="Categories">
+    <CollapsibleSection title="Categories" defaultOpen>
       <p className="text-glass-3 mb-4 text-xs">
         Tag a category as Interest, Dividend or Gift Aid so it feeds the Tax tab.
       </p>
@@ -1552,6 +1630,9 @@ function CategoriesManager({
         </Button>
       </form>
       {error && <div className="mt-2 text-sm text-[#ff6b8a]">{error}</div>}
+
+      {/* Auto-categorisation rules live with categories — same concept. */}
+      <CategoryRulesManager categories={categories} />
     </CollapsibleSection>
   );
 }
