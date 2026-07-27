@@ -76,6 +76,20 @@ backupRouter.post(
       throw new HttpError(400, "Invalid backup file.");
     }
 
+    // A restore inserts straight from the uploaded file, so cap the row count —
+    // otherwise one 25 MB upload could write millions of rows.
+    const MAX_ROWS = 200_000;
+    const totalRows = Object.values(data).reduce<number>(
+      (n, v) => n + (Array.isArray(v) ? v.length : 0),
+      0
+    );
+    if (totalRows > MAX_ROWS) {
+      throw new HttpError(
+        413,
+        `Backup is too large to restore (${totalRows.toLocaleString()} rows, limit ${MAX_ROWS.toLocaleString()}).`
+      );
+    }
+
     // Force ownership to the current user, regardless of what's in the file.
     // Rows come from arbitrary JSON, so they're intentionally loosely typed.
     const withUser = (rows: unknown): any[] =>

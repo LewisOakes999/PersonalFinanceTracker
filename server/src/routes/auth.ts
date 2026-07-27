@@ -12,8 +12,16 @@ import {
 import { provisionUserDefaults } from "../lib/defaults.js";
 import { rateLimit } from "../lib/ratelimit.js";
 
-// Blunt brute-force: 10 attempts per IP per 15 minutes on credential endpoints.
+// Blunt brute-force: 10 login attempts per IP per 15 minutes.
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+
+// Account creation gets its own, tighter budget so a burst of signups can't
+// also lock legitimate users out of logging in (and vice versa).
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: "Too many accounts created from this network. Please try again later.",
+});
 
 export const authRouter = Router();
 
@@ -50,7 +58,7 @@ authRouter.get(
 // POST /api/auth/setup — register a new account (open signup, multi-user).
 authRouter.post(
   "/setup",
-  authLimiter,
+  signupLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = signupCredentials.parse(req.body);
     const user = await prisma.user.create({

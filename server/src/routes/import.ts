@@ -28,6 +28,13 @@ importRouter.post(
 
     const rows = parseCsv(req.file.buffer.toString("utf8"));
     if (rows.length === 0) throw new HttpError(400, "CSV contained no data rows.");
+    const MAX_ROWS = 20_000;
+    if (rows.length > MAX_ROWS) {
+      throw new HttpError(
+        413,
+        `CSV has ${rows.length.toLocaleString()} rows; the limit is ${MAX_ROWS.toLocaleString()} per import. Split the file and try again.`
+      );
+    }
 
     // Resolve the target account (must belong to the user).
     let accountId = typeof req.body.accountId === "string" ? req.body.accountId : "";

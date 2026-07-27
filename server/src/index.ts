@@ -26,6 +26,7 @@ import { summaryRouter } from "./routes/summary.js";
 import { settingsRouter } from "./routes/settings.js";
 import { importRouter } from "./routes/import.js";
 import { exportRouter } from "./routes/export.js";
+import { writeLimiter } from "./lib/ratelimit.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -33,8 +34,17 @@ const origins = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((o) => o.trim());
 
+// Behind a hosting proxy (Render, Fly, nginx…) the socket address is the
+// proxy's, so every visitor would share one rate-limit bucket — one abuser
+// could lock everyone out. Trust the first proxy hop so req.ip is the real
+// client. Only enabled in production, where a proxy is actually in front.
+if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
+
 app.use(cors({ origin: origins }));
-app.use(express.json({ limit: "25mb" })); // backups can be large
+// Most endpoints only ever receive small JSON; only a backup restore is large,
+// so the generous limit is scoped to that route rather than applied globally.
+app.use("/api/backup/restore", express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "200kb" }));
 
 // Public routes.
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
@@ -42,6 +52,8 @@ app.use("/api/auth", authRouter);
 
 // Everything below requires a valid token.
 app.use("/api", requireAuth);
+// Blunt per-user flood protection on authenticated writes.
+app.use("/api", writeLimiter);
 app.use("/api/transactions", transactionsRouter);
 app.use("/api/transfers", transfersRouter);
 app.use("/api/recurring", recurringRouter);
@@ -84,6 +96,17 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   }
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: err.message });
+  }
+  // Body larger than the configured limit (body-parser / multer).
+  const code = (err as { code?: string; type?: string })?.type ?? (err as { code?: string }).code;
+  if (code === "entity.too.large") {
+    return res.status(413).json({ error: "That request is too large." });
+  }
+  if (code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ error: "That file is too large (8 MB maximum)." });
+  }
+  if (code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE") {
+    return res.status(400).json({ error: "Upload one file at a time." });
   }
   // Prisma "record not found" on update/delete.
   if (typeof err === "object" && err !== null && (err as { code?: string }).code === "P2025") {
