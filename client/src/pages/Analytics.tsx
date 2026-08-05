@@ -22,7 +22,7 @@ import type {
 } from "../types";
 import { SectionTitle, Tile } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
-import { defaultPeriod, periodParams, type Period } from "../lib/period";
+import { buildPeriod, defaultPeriod, periodParams, type Period } from "../lib/period";
 import { formatDate, shortMonthLabel } from "../lib/format";
 import { fittedDomain } from "../lib/chart";
 import { useCurrency } from "../lib/CurrencyContext";
@@ -30,6 +30,9 @@ import { tooltipStyle } from "./Dashboard";
 
 const INCOME = "#34e0c4";
 const EXPENSE = "#ff6b8a";
+
+/** The bit of Recharts' click payload we rely on. */
+type BarClickState = { activePayload?: { payload?: { month?: string } }[] } | null;
 const NETWORTH = "#64d2ff";
 const AXIS = "rgba(245,245,247,0.45)";
 
@@ -74,6 +77,38 @@ export default function Analytics() {
     () => netWorth.map((p) => ({ ...p, label: shortMonthLabel(p.month) })),
     [netWorth]
   );
+
+  // Which bar (if any) the rest of the page is currently scoped to. Only a
+  // month-mode period corresponds to a single bar.
+  const selectedMonth =
+    period.mode === "month"
+      ? `${period.year}-${String(period.month).padStart(2, "0")}`
+      : null;
+  // The page opens on the current month, so that state isn't a "selection" —
+  // keep showing the hint until the user actually picks a different month.
+  const thisMonth = defaultPeriod("month");
+  const isCurrentMonth =
+    period.mode === "month" &&
+    period.year === thisMonth.year &&
+    period.month === thisMonth.month;
+  // Dim the other bars only once a month has actually been picked, so the
+  // chart doesn't arrive looking half-disabled.
+  const highlightMonth = isCurrentMonth ? null : selectedMonth;
+
+  /** Clicking a bar scopes the page's period to that month. */
+  const selectMonth = (month: string) => {
+    const [year, m] = month.split("-").map(Number);
+    if (!year || !m) return;
+    setPeriod(
+      buildPeriod({
+        mode: "month",
+        year,
+        month: m,
+        from: `${month}-01`,
+        to: `${month}-01`,
+      })
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -168,12 +203,39 @@ export default function Analytics() {
         </div>
       </Tile>
 
-      {/* Income vs expenses over time */}
+      {/* Income vs expenses over time — click a month to focus the page on it */}
       <Tile className="p-[22px]">
-        <SectionTitle>Income vs Expenses (last 12 months)</SectionTitle>
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+            Income vs Expenses (last 12 months)
+          </h2>
+          <span className="text-glass-3 text-[12px]">
+            {isCurrentMonth ? (
+              "Click a month to see its breakdown below"
+            ) : (
+              <>
+                Showing <span className="text-glass-2">{period.label}</span> ·{" "}
+                <button
+                  onClick={() => setPeriod(defaultPeriod("month"))}
+                  className="text-[#64d2ff] hover:underline"
+                >
+                  back to this month
+                </button>
+              </>
+            )}
+          </span>
+        </div>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+            <BarChart
+              data={trendData}
+              margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+              className="cursor-pointer"
+              onClick={(state: BarClickState) => {
+                const month = state?.activePayload?.[0]?.payload?.month;
+                if (month) selectMonth(month);
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
               <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} />
               <YAxis
@@ -189,8 +251,25 @@ export default function Analytics() {
                 formatter={(v: number, name: string) => [format(v), name]}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="income" name="Income" fill={INCOME} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" name="Expenses" fill={EXPENSE} radius={[4, 4, 0, 0]} />
+              {/* When a month is selected, the others dim so the choice is obvious. */}
+              <Bar dataKey="income" name="Income" fill={INCOME} radius={[4, 4, 0, 0]}>
+                {trendData.map((d) => (
+                  <Cell
+                    key={d.month}
+                    fill={INCOME}
+                    fillOpacity={!highlightMonth || d.month === highlightMonth ? 1 : 0.28}
+                  />
+                ))}
+              </Bar>
+              <Bar dataKey="expenses" name="Expenses" fill={EXPENSE} radius={[4, 4, 0, 0]}>
+                {trendData.map((d) => (
+                  <Cell
+                    key={d.month}
+                    fill={EXPENSE}
+                    fillOpacity={!highlightMonth || d.month === highlightMonth ? 1 : 0.28}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
