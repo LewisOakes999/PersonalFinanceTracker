@@ -1,7 +1,6 @@
 import {
   ArrowLeftRight,
   ChartPie,
-  Heart,
   LayoutDashboard,
   ReceiptText,
   Settings,
@@ -14,10 +13,6 @@ import { Button, Tile } from "../components/ui";
 import { BrandTile } from "../components/BrandMark";
 import { AUTHOR, AUTHOR_URL, REPO_URL } from "../lib/site";
 import { GithubIcon } from "../components/GithubIcon";
-
-// TODO: replace with your own donation link (Buy Me a Coffee, Ko-fi, GitHub
-// Sponsors, PayPal, etc.).
-const DONATE_URL = "https://www.buymeacoffee.com/";
 
 const MODULES: { icon: LucideIcon; title: string; blurb: string }[] = [
   {
@@ -192,25 +187,7 @@ export default function Landing({
           </Tile>
         </section>
 
-        {/* Donate */}
         <section className="mt-6">
-          <Tile className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
-            <div className="max-w-xl">
-              <h2 className="text-glass text-[22px] font-semibold tracking-tight">
-                Free forever — donations keep it going
-              </h2>
-              <p className="text-glass-2 mt-2 text-[14px]">
-                This app is completely free to use. If it helps you stay on top of your finances
-                and you'd like to support its development, a small donation is hugely appreciated —
-                but never required.
-              </p>
-            </div>
-            <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" className="shrink-0">
-              <Button variant="primary" className="inline-flex items-center gap-2 !px-6 !py-2.5 text-[15px]">
-                <Heart size={15} strokeWidth={2} /> Donate
-              </Button>
-            </a>
-          </Tile>
           <div className="text-glass-3 mt-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-white/10 pt-6 text-xs">
             <span>
               Created by{" "}

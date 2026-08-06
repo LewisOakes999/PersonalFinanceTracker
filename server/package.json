@@ -13,7 +13,8 @@
     "seed": "tsx prisma/seed.ts",
     "test": "vitest run",
     "reset-password": "tsx src/scripts/reset-password.ts",
-    "db:setup": "prisma migrate deploy && prisma generate && tsx prisma/seed.ts"
+    "db:setup": "prisma migrate deploy && prisma generate && tsx prisma/seed.ts",
+    "db:init": "prisma migrate deploy && prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

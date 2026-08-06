@@ -85,8 +85,46 @@ PersonalFinanceTracker/
 
 ## Prerequisites
 
-- **Node.js** 18+ (works on current LTS / newer)
-- **PostgreSQL** 14+ running locally
+You need **Node.js 18+** and **PostgreSQL 14+**. Pick your platform:
+
+<details open>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install node postgresql@16
+brew services start postgresql@16
+```
+
+On a default Homebrew install your database user is your macOS username with no password.
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+1. Install **Node.js** (LTS) from [nodejs.org](https://nodejs.org) — the installer adds it to your PATH.
+2. Install **PostgreSQL** from [postgresql.org/download/windows](https://www.postgresql.org/download/windows/).
+   During setup you'll choose a password for the `postgres` user — **remember it**, it goes in
+   `DATABASE_URL`. Leave "Add to PATH" ticked.
+3. Use **PowerShell** (or Git Bash) for the commands below. If `psql` isn't recognised, either
+   reopen the terminal or use the bundled **SQL Shell (psql)** app.
+
+Your connection string will look like:
+`postgresql://postgres:YOUR_PASSWORD@localhost:5432/finance_tracker?schema=public`
+</details>
+
+<details>
+<summary><b>Linux (Debian/Ubuntu)</b></summary>
+
+```bash
+sudo apt update && sudo apt install -y nodejs npm postgresql
+sudo service postgresql start
+sudo -u postgres createuser --superuser "$USER"   # let your account create databases
+```
+
+On Fedora/RHEL use `sudo dnf install nodejs postgresql-server` and run
+`sudo postgresql-setup --initdb` first. If your distro ships an older Node, use
+[nvm](https://github.com/nvm-sh/nvm) to get 18+.
+</details>
 
 ---
 
@@ -103,6 +141,16 @@ npm run install:all      # installs root, server and client deps
 ```bash
 createdb finance_tracker
 ```
+
+<details>
+<summary>If <code>createdb</code> isn't available (common on Windows)</summary>
+
+Open **SQL Shell (psql)** — or run `psql -U postgres` — and then:
+
+```sql
+CREATE DATABASE finance_tracker;
+```
+</details>
 
 ### 3. Configure the server environment
 
@@ -124,29 +172,40 @@ AUTH_SECRET="change-me-to-a-long-random-string"
 > no password, e.g. `postgresql://yourname@localhost:5432/finance_tracker?schema=public`.
 > Generate a real `AUTH_SECRET` with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 
-### 4. Run migrations and seed sample data
+### 4. Create the database tables
+
+Choose one:
 
 ```bash
-cd server
-npm run prisma:migrate    # apply migrations + generate the Prisma client
-npm run seed              # load the demo account with sample data
-cd ..
+npm run db:init     # tables only — start with a completely empty app
+npm run db:setup    # tables + a demo account full of sample data to explore
 ```
 
 ### 5. Start both apps
 
 ```bash
-npm run dev               # API on :4000, client on :5173
+npm run dev         # API on :4000, client on :5173
 ```
 
-Open **http://localhost:5173**. On first run you'll **create your own account** (it
-starts empty and private). To explore a fully-populated app instead, sign in with the
-**demo account**:
+Open **http://localhost:5173**.
 
-- **Email:** `demo@example.com`
-- **Password:** `demopass123`
+### Do I need an account?
 
-> Running `npm run seed` only ever touches the demo account; your own data is untouched.
+Yes — but it's **your own account on your own machine**, not a service you sign up to.
+There is no central server: click **Sign up**, pick any email and password, and that
+account is created in the PostgreSQL database running on your computer. Nothing is sent
+anywhere, and the email is only an identifier — no verification email is sent.
+
+The login exists so the app can support more than one person (a household) and so your
+figures aren't on screen the moment someone opens the browser.
+
+If you ran `npm run db:setup`, you can also sign in to the demo account to look around
+before adding your own data:
+
+- **Email:** `demo@example.com` · **Password:** `demopass123`
+
+> Re-running `npm run seed` only ever touches the demo account; your own data is untouched.
+> Forgotten your password? `cd server && npm run reset-password`.
 
 ---
 
