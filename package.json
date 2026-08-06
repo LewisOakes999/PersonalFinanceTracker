@@ -2,7 +2,7 @@
   "name": "personal-finance-tracker",
   "version": "1.0.0",
   "private": true,
-  "description": "A single-user personal finance tracker (Vite/React/TS client + Express/Prisma/Postgres server).",
+  "description": "SuperSaver — a free, self-hosted personal finance tracker (accounts, budgets, goals, forecasts and UK tax figures).",
   "scripts": {
     "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --prefix server run dev",
@@ -12,5 +12,12 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
-  }
+  },
+  "license": "MIT",
+  "author": "Lewis Oakes",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LewisOakes999/PersonalFinanceTracker.git"
+  },
+  "homepage": "https://github.com/LewisOakes999/PersonalFinanceTracker"
 }

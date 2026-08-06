@@ -12,6 +12,20 @@ Built as a small monorepo: a **Vite + React + TypeScript + Tailwind** client and
 > **Heads up:** this is a personal tool for local use, not a hosted product, and nothing
 > in it is financial or tax advice. See [Security & scope](#security--scope).
 
+**Free and open source (MIT).** Clone it, run it on your own machine, and your data stays
+in your own database — nothing is sent anywhere. [Setup](#setup) takes about five minutes.
+
+```bash
+git clone https://github.com/LewisOakes999/PersonalFinanceTracker.git
+cd PersonalFinanceTracker
+npm run install:all     # install client + server dependencies
+npm run db:setup        # run migrations and load sample data
+npm run dev             # client on :5173, API on :4000
+```
+
+You'll need Node 20+ and PostgreSQL running locally — see [Prerequisites](#prerequisites)
+and step 3 for the one environment variable you must set.
+
 ---
 
 ## Features
@@ -208,3 +222,17 @@ rate-limiting but **no email verification or email-based password reset** (use
 `npm run reset-password` instead); and `AUTH_SECRET` should be a long random string you
 keep private. Don't deploy this publicly without further hardening (HTTPS, secure cookie
 storage, CSRF protection, etc.).
+
+---
+
+## Author & licence
+
+Created by **Lewis Oakes** — [github.com/LewisOakes999](https://github.com/LewisOakes999).
+
+Released under the [MIT licence](LICENSE): you're free to use, modify and self-host it,
+including commercially, as long as the copyright notice is kept. It comes with no
+warranty.
+
+If you find it useful, a star on the
+[repo](https://github.com/LewisOakes999/PersonalFinanceTracker) is always appreciated —
+and issues and pull requests are welcome.

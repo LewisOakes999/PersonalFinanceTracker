@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Button, Tile } from "../components/ui";
 import { BrandTile } from "../components/BrandMark";
+import { AUTHOR, AUTHOR_URL, REPO_URL } from "../lib/site";
+import { GithubIcon } from "../components/GithubIcon";
 
 // TODO: replace with your own donation link (Buy Me a Coffee, Ko-fi, GitHub
 // Sponsors, PayPal, etc.).
@@ -102,7 +104,13 @@ export default function Landing({
         {/* Top bar */}
         <header className="mb-12 flex items-center justify-between gap-3 sm:mb-16">
           <Brand />
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+              <Button className="inline-flex items-center gap-1.5">
+                <GithubIcon size={14} />
+                <span className="hidden sm:inline">GitHub</span>
+              </Button>
+            </a>
             <Button onClick={onLogin}>Log in</Button>
             <Button variant="primary" onClick={onSignup}>
               Sign up
@@ -164,8 +172,28 @@ export default function Landing({
           ))}
         </section>
 
-        {/* Donate */}
+        {/* Open source — run your own copy */}
         <section className="mt-16 sm:mt-20">
+          <Tile className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+            <div className="max-w-xl">
+              <h2 className="text-glass text-[22px] font-semibold tracking-tight">
+                Open source — run your own copy
+              </h2>
+              <p className="text-glass-2 mt-2 text-[14px]">
+                The whole thing is on GitHub under the MIT licence. Clone it, run it on your own
+                machine in about five minutes, and your data never leaves your database.
+              </p>
+            </div>
+            <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="shrink-0">
+              <Button className="inline-flex items-center gap-2 !px-6 !py-2.5 text-[15px]">
+                <GithubIcon size={15} /> View on GitHub
+              </Button>
+            </a>
+          </Tile>
+        </section>
+
+        {/* Donate */}
+        <section className="mt-6">
           <Tile className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
             <div className="max-w-xl">
               <h2 className="text-glass text-[22px] font-semibold tracking-tight">
@@ -183,9 +211,28 @@ export default function Landing({
               </Button>
             </a>
           </Tile>
-          <p className="text-glass-3 mt-6 text-xs">
-            Your data stays on your own server. © {new Date().getFullYear()} SuperSaver.
-          </p>
+          <div className="text-glass-3 mt-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-white/10 pt-6 text-xs">
+            <span>
+              Created by{" "}
+              <a
+                href={AUTHOR_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-glass-2 hover:text-glass underline-offset-2 hover:underline"
+              >
+                {AUTHOR}
+              </a>{" "}
+              · © {new Date().getFullYear()} SuperSaver · MIT licensed
+            </span>
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-glass inline-flex items-center gap-1.5 transition-colors"
+            >
+              <GithubIcon size={12} /> Source on GitHub
+            </a>
+          </div>
         </section>
       </div>
     </div>

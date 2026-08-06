@@ -16,6 +16,8 @@ import { useAuth } from "./lib/AuthContext";
 import { BrandTile } from "./components/BrandMark";
 import { SidebarTips } from "./components/SidebarTips";
 import { Onboarding } from "./components/Onboarding";
+import { AUTHOR, REPO_URL } from "./lib/site";
+import { GithubIcon } from "./components/GithubIcon";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Analytics from "./pages/Analytics";
@@ -116,6 +118,17 @@ function SidebarContent({
             </button>
           </div>
         </div>
+        {/* Credit — sits in the sidebar so it shows on every module. */}
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-glass-3 hover:text-glass flex items-center justify-center gap-1.5 text-[11px] transition-colors"
+          title="View the source on GitHub"
+        >
+          <GithubIcon size={11} />
+          Built by {AUTHOR}
+        </a>
       </div>
     </div>
   );
