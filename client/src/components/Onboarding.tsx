@@ -15,7 +15,7 @@ const STEPS: TourStep[] = [
     tab: "settings",
     target: "add-account",
     title: "Add your accounts",
-    body: "This is the account form in Settings. Fill it in and press “Add Account” to add a current, savings, ISA or pension account — its balance and interest then flow through the whole app.",
+    body: "In Settings, use “+ Add Account” to add a current, savings, ISA or pension account — its balance and interest then flow through the whole app.",
   },
   {
     tab: "transactions",

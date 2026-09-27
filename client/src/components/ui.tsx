@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, KeyboardEvent, ReactNode } from "react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, X, ChevronDown } from "lucide-react";
 
 /** Small account-type badge (ISA / PB / PEN / INV). One neutral style for all —
@@ -187,7 +188,9 @@ export function MonthSelector({
 }
 
 /** A centred modal on a frosted glass panel. Pass `onBack` when the modal is
- *  showing a sub-view, so there's a one-click way out of it that isn't Close. */
+ *  showing a sub-view, so there's a one-click way out of it that isn't Close.
+ *  Rendered into <body>: a glass panel's backdrop-filter would otherwise trap
+ *  the fixed overlay inside that panel, letting later panels paint over it. */
 export function Modal({
   title,
   onClose,
@@ -199,9 +202,9 @@ export function Modal({
   onBack?: () => void;
   children: ReactNode;
 }) {
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-20 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-20 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -234,7 +237,8 @@ export function Modal({
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
+  Plus,
   ShieldCheck,
   SlidersHorizontal,
   Tags,
@@ -28,6 +29,7 @@ import {
   PbBadge,
   PensionBadge,
   CollapsibleSection,
+  Modal,
 } from "../components/ui";
 import {
   CURRENCIES,
@@ -72,7 +74,11 @@ function InvestmentFields({
   return (
     <>
       <Field label="Risk profile">
-        <select value={profileId} onChange={(e) => applyProfile(e.target.value)}>
+        <select
+          className="max-w-full"
+          value={profileId}
+          onChange={(e) => applyProfile(e.target.value)}
+        >
           {RISK_PROFILES.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
@@ -899,56 +905,7 @@ function AccountsManager({
   focusAccountId?: string | null;
   onFocusHandled?: () => void;
 }) {
-  const { currency: baseCurrency } = useCurrency();
-  const [name, setName] = useState("");
-  const [type, setType] = useState("current");
-  const [currency, setCurrency] = useState(baseCurrency);
-  const [openingBalance, setOpeningBalance] = useState("0");
-  const [interestRate, setInterestRate] = useState("0");
-  const [volatility, setVolatility] = useState("0");
-  const [isIsa, setIsIsa] = useState(false);
-  const [isPremiumBonds, setIsPremiumBonds] = useState(false);
-  const [isInvestment, setIsInvestment] = useState(false);
-  const [isPension, setIsPension] = useState(false);
-  const [termStart, setTermStart] = useState("");
-  const [maturityDate, setMaturityDate] = useState("");
-  const [interestPaid, setInterestPaid] = useState("");
-  const [error, setError] = useState("");
-
-  const add = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!name.trim()) return setError("Name is required.");
-    await api.createAccount({
-      name: name.trim(),
-      type,
-      currency,
-      openingBalance: Number(openingBalance) || 0,
-      interestRate: Number(interestRate) || 0,
-      volatility: isInvestment ? Number(volatility) || 0 : 0,
-      isIsa,
-      isPremiumBonds,
-      isInvestment,
-      isPension,
-      termStart: termStart || null,
-      maturityDate: maturityDate || null,
-      interestPaid: interestPaid || null,
-    });
-    toast.success(`Account “${name.trim()}” added.`);
-    setName("");
-    setCurrency(baseCurrency);
-    setOpeningBalance("0");
-    setInterestRate("0");
-    setVolatility("0");
-    setIsIsa(false);
-    setIsPremiumBonds(false);
-    setIsInvestment(false);
-    setIsPension(false);
-    setTermStart("");
-    setMaturityDate("");
-    setInterestPaid("");
-    onChange();
-  };
+  const [adding, setAdding] = useState(false);
 
   const remove = async (id: string) => {
     if (!confirm("Delete this account?")) return;
@@ -977,11 +934,20 @@ function AccountsManager({
 
   return (
     <CollapsibleSection title="Accounts" defaultOpen>
-      <p className="text-glass-3 mb-4 text-xs">
-        Add each account with the balance it holds <b className="text-glass-2">right now</b> as its
-        opening balance — transactions and transfers you record adjust it from there. The fixed-term
-        fields are only for fixed-rate ISAs and bonds; leave them blank otherwise.
-      </p>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <p className="text-glass-3 text-xs">
+          Add each account with the balance it holds <b className="text-glass-2">right now</b> as
+          its opening balance — transactions and transfers you record adjust it from there.
+        </p>
+        <Button
+          variant="primary"
+          className="inline-flex shrink-0 items-center gap-1.5 self-start"
+          data-tour="add-account"
+          onClick={() => setAdding(true)}
+        >
+          <Plus size={14} strokeWidth={2} /> Add Account
+        </Button>
+      </div>
       {accounts.length > 0 && (
         <AccountGroup title="Active accounts" count={active.length}>
           {active.length === 0 ? (
@@ -1002,110 +968,190 @@ function AccountsManager({
           {inactive.map(row)}
         </AccountGroup>
       )}
-      <h3 className="text-glass-2 mb-3 mt-5 text-[12px] font-semibold uppercase tracking-[0.06em]">
-        Add an account
-      </h3>
-      <form onSubmit={add} data-tour="add-account" className="flex flex-wrap items-end gap-3">
+      {adding && (
+        <AddAccountModal
+          onClose={() => setAdding(false)}
+          onSaved={() => {
+            setAdding(false);
+            onChange();
+          }}
+        />
+      )}
+    </CollapsibleSection>
+  );
+}
+
+/** The new-account form, in a modal like Add Transaction. */
+function AddAccountModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { currency: baseCurrency } = useCurrency();
+  const [name, setName] = useState("");
+  const [type, setType] = useState("current");
+  const [currency, setCurrency] = useState(baseCurrency);
+  const [openingBalance, setOpeningBalance] = useState("0");
+  const [interestRate, setInterestRate] = useState("0");
+  const [volatility, setVolatility] = useState("0");
+  const [isIsa, setIsIsa] = useState(false);
+  const [isPremiumBonds, setIsPremiumBonds] = useState(false);
+  const [isInvestment, setIsInvestment] = useState(false);
+  const [isPension, setIsPension] = useState(false);
+  const [termStart, setTermStart] = useState("");
+  const [maturityDate, setMaturityDate] = useState("");
+  const [interestPaid, setInterestPaid] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) return setError("Name is required.");
+    setSaving(true);
+    try {
+      await api.createAccount({
+        name: name.trim(),
+        type,
+        currency,
+        openingBalance: Number(openingBalance) || 0,
+        interestRate: Number(interestRate) || 0,
+        volatility: isInvestment ? Number(volatility) || 0 : 0,
+        isIsa,
+        isPremiumBonds,
+        isInvestment,
+        isPension,
+        termStart: termStart || null,
+        maturityDate: maturityDate || null,
+        interestPaid: interestPaid || null,
+      });
+      toast.success(`Account “${name.trim()}” added.`);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title="Add Account" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Joint Account" />
-        </Field>
-        <Field label="Type">
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            {ACCOUNT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Currency">
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Opening balance">
           <input
-            type="number"
-            step="0.01"
-            className="num w-28"
-            value={openingBalance}
-            onChange={(e) => setOpeningBalance(e.target.value)}
+            className="w-full"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Joint Account"
           />
         </Field>
-        {isInvestment ? (
-          <InvestmentFields
-            rate={interestRate}
-            vol={volatility}
-            onRate={setInterestRate}
-            onVol={setVolatility}
-          />
-        ) : (
-          <Field label="Interest % (AER)">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Type">
+            <select className="w-full" value={type} onChange={(e) => setType(e.target.value)}>
+              {ACCOUNT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Currency">
+            <select className="w-full" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-glass">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isIsa}
+              onChange={(e) => {
+                setIsIsa(e.target.checked);
+                if (e.target.checked) setIsPremiumBonds(false);
+              }}
+            />
+            ISA
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isPremiumBonds}
+              onChange={(e) => {
+                setIsPremiumBonds(e.target.checked);
+                if (e.target.checked) setIsIsa(false);
+              }}
+            />
+            Premium Bonds
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isInvestment}
+              onChange={(e) => setIsInvestment(e.target.checked)}
+            />
+            Investment
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isPension}
+              onChange={(e) => setIsPension(e.target.checked)}
+            />
+            Pension
+          </label>
+        </div>
+        {/* Fields may not outgrow the modal on a phone (long risk-profile names). */}
+        <div className="flex flex-wrap items-end gap-3 [&>*]:max-w-full">
+          <Field label="Opening balance">
             <input
               type="number"
               step="0.01"
-              className="num w-24"
-              value={interestRate}
-              onChange={(e) => setInterestRate(e.target.value)}
+              className="num w-28"
+              value={openingBalance}
+              onChange={(e) => setOpeningBalance(e.target.value)}
             />
           </Field>
-        )}
-        <label className="flex items-center gap-2 pb-2 text-sm text-glass">
-          <input
-            type="checkbox"
-            checked={isIsa}
-            onChange={(e) => {
-              setIsIsa(e.target.checked);
-              if (e.target.checked) setIsPremiumBonds(false);
-            }}
+          {isInvestment ? (
+            <InvestmentFields
+              rate={interestRate}
+              vol={volatility}
+              onRate={setInterestRate}
+              onVol={setVolatility}
+            />
+          ) : (
+            <Field label="Interest % (AER)">
+              <input
+                type="number"
+                step="0.01"
+                className="num w-24"
+                value={interestRate}
+                onChange={(e) => setInterestRate(e.target.value)}
+              />
+            </Field>
+          )}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <TermFields
+            start={termStart}
+            maturity={maturityDate}
+            interestPaid={interestPaid}
+            onStart={setTermStart}
+            onMaturity={setMaturityDate}
+            onInterestPaid={setInterestPaid}
           />
-          ISA
-        </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-glass">
-          <input
-            type="checkbox"
-            checked={isPremiumBonds}
-            onChange={(e) => {
-              setIsPremiumBonds(e.target.checked);
-              if (e.target.checked) setIsIsa(false);
-            }}
-          />
-          Premium Bonds
-        </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-glass">
-          <input
-            type="checkbox"
-            checked={isInvestment}
-            onChange={(e) => setIsInvestment(e.target.checked)}
-          />
-          Investment
-        </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-glass">
-          <input
-            type="checkbox"
-            checked={isPension}
-            onChange={(e) => setIsPension(e.target.checked)}
-          />
-          Pension
-        </label>
-        <TermFields
-          start={termStart}
-          maturity={maturityDate}
-          interestPaid={interestPaid}
-          onStart={setTermStart}
-          onMaturity={setMaturityDate}
-          onInterestPaid={setInterestPaid}
-        />
-        <Button type="submit" variant="primary">
-          Add Account
-        </Button>
+        </div>
+        {error && <div className="text-sm text-[#ff6b8a]">{error}</div>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={saving}>
+            {saving ? "Adding…" : "Add Account"}
+          </Button>
+        </div>
       </form>
-      {error && <div className="mt-2 text-sm text-[#ff6b8a]">{error}</div>}
-    </CollapsibleSection>
+    </Modal>
   );
 }
 
