@@ -22,6 +22,7 @@ export interface Account {
   termStart?: string | null; // fixed-term start (ISO)
   maturityDate?: string | null; // fixed-term maturity / end (ISO)
   interestPaid?: string | null; // monthly | quarterly | annually | maturity
+  closedAt?: string | null; // set once closed — nothing can be dated after this day (ISO)
   createdAt?: string;
 }
 
@@ -190,6 +191,7 @@ export interface AccountBalance {
   termStart?: string | null;
   maturityDate?: string | null;
   interestPaid?: string | null;
+  closedAt?: string | null;
   balance: number; // in the account's own currency
   baseBalance: number; // converted to the base/display currency
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  Archive,
   ArrowUpRight,
   Banknote,
   Briefcase,
@@ -48,6 +49,7 @@ import { defaultPeriod, periodParams, type Period } from "../lib/period";
 import { currentMonth, formatCurrency, formatDate, nextInterestDate } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
 import { useAuth } from "../lib/AuthContext";
+import { isInactive } from "../lib/accounts";
 
 const INCOME = "#34e0c4";
 const EXPENSE = "#ff6b8a";
@@ -508,10 +510,12 @@ export default function Dashboard({
             empty={
               balances && balances.accounts.length === 0
                 ? "No accounts yet — add your bank, savings and credit accounts."
-                : undefined
+                : balances && balances.accounts.every(isInactive)
+                  ? "No active accounts."
+                  : undefined
             }
           >
-            {balances?.accounts.map((a) => (
+            {balances?.accounts.filter((a) => !isInactive(a)).map((a) => (
               <NetWorthRow
                 key={a.id}
                 icon={ACCOUNT_ICONS[a.type] ?? Wallet}
@@ -544,6 +548,26 @@ export default function Dashboard({
                 onClick={onViewAccount ? () => onViewAccount(a.id) : undefined}
               />
             ))}
+            {/* Inactive accounts are hidden, but money still left in them counts
+                toward the total — one line keeps the column adding up. */}
+            {(() => {
+              const held = (balances?.accounts ?? []).filter(
+                (a) => isInactive(a) && Math.abs(a.baseBalance) >= 0.005
+              );
+              if (held.length === 0) return null;
+              const left = held.reduce((s, a) => s + a.baseBalance, 0);
+              return (
+                <NetWorthRow
+                  icon={Archive}
+                  iconTint={tint("#8e8e93", 0.18)}
+                  name={`Left in inactive account${held.length === 1 ? "" : "s"}`}
+                  title={held.map((a) => a.name).join(" · ")}
+                  amount={`${left < 0 ? "−" : ""}${format(Math.abs(left))}`}
+                  amountColor={left < 0 ? EXPENSE : undefined}
+                  onClick={onManage ? () => onManage("accounts") : undefined}
+                />
+              );
+            })()}
           </NetWorthColumn>
 
           {/* Other assets */}

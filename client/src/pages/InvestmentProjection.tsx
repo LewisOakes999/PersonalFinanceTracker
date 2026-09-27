@@ -37,7 +37,9 @@ export default function InvestmentProjection() {
   const [data, setData] = useState<InvestmentForecast | null>(null);
 
   useEffect(() => {
-    api.listAccounts().then((all) => setInvestAccounts(all.filter((a) => a.isInvestment)));
+    api
+      .listAccounts()
+      .then((all) => setInvestAccounts(all.filter((a) => a.isInvestment && !a.closedAt)));
   }, []);
 
   useEffect(() => {

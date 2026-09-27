@@ -98,6 +98,9 @@ model Account {
   termStart       DateTime?     // fixed-term start date (optional)
   maturityDate    DateTime?     // fixed-term maturity / end date (optional)
   interestPaid    String?       // monthly | quarterly | annually | maturity (optional)
+  // Set when the account is closed. Nothing can be dated after this day, and
+  // the account drops out of active lists and forward projections.
+  closedAt        DateTime?
   transactions    Transaction[]
   transfersOut    Transfer[]             @relation("TransferFrom")
   transfersIn     Transfer[]             @relation("TransferTo")

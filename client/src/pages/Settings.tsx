@@ -43,6 +43,7 @@ import { applyTheme, getTheme, type Theme } from "../lib/theme";
 import { canDepreciate, ratePercent } from "../lib/depreciation";
 import { useAuth } from "../lib/AuthContext";
 import { toast } from "../lib/toast";
+import { isInactive } from "../lib/accounts";
 import { passwordValid } from "../lib/password";
 import { PasswordStrength } from "../components/PasswordStrength";
 
@@ -948,16 +949,36 @@ function AccountsManager({
         fields are only for fixed-rate ISAs and bonds; leave them blank otherwise.
       </p>
       <ul className="mb-4 divide-y divide-white/10">
-        {accounts.map((a) => (
-          <AccountRow
-            key={a.id}
-            account={a}
-            format={format}
-            onChange={onChange}
-            onRemove={() => remove(a.id)}
-          />
-        ))}
+        {accounts
+          .filter((a) => !isInactive(a))
+          .map((a) => (
+            <AccountRow
+              key={a.id}
+              account={a}
+              format={format}
+              onChange={onChange}
+              onRemove={() => remove(a.id)}
+            />
+          ))}
       </ul>
+      {accounts.some(isInactive) && (
+        <div className="mb-4">
+          <div className="text-glass-3 text-[11px] font-medium uppercase tracking-[0.08em]">
+            Inactive
+          </div>
+          <ul className="divide-y divide-white/10">
+            {accounts.filter(isInactive).map((a) => (
+              <AccountRow
+                key={a.id}
+                account={a}
+                format={format}
+                onChange={onChange}
+                onRemove={() => remove(a.id)}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
       <form onSubmit={add} data-tour="add-account" className="flex flex-wrap items-end gap-3">
         <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Joint Account" />
@@ -1087,63 +1108,128 @@ function AccountRow({
   const [termStart, setTermStart] = useState(toDateInput(account.termStart));
   const [maturityDate, setMaturityDate] = useState(toDateInput(account.maturityDate));
   const [interestPaid, setInterestPaid] = useState(account.interestPaid ?? "");
+  const inactive = isInactive(account);
+  const today = new Date().toISOString().slice(0, 10);
+  const [closedAt, setClosedAt] = useState(toDateInput(account.closedAt) || today);
+  const [closing, setClosing] = useState(false);
 
   const save = async () => {
-    await api.updateAccount(account.id, {
-      name: name.trim(),
-      type,
-      currency,
-      openingBalance: Number(openingBalance) || 0,
-      interestRate: Number(interestRate) || 0,
-      volatility: isInvestment ? Number(volatility) || 0 : 0,
-      isIsa,
-      isPremiumBonds,
-      isInvestment,
-      isPension,
-      termStart: termStart || null,
-      maturityDate: maturityDate || null,
-      interestPaid: interestPaid || null,
-    });
-    toast.success("Account updated.");
-    setEditing(false);
-    onChange();
+    try {
+      await api.updateAccount(account.id, {
+        name: name.trim(),
+        type,
+        currency,
+        openingBalance: Number(openingBalance) || 0,
+        interestRate: Number(interestRate) || 0,
+        volatility: isInvestment ? Number(volatility) || 0 : 0,
+        isIsa,
+        isPremiumBonds,
+        isInvestment,
+        isPension,
+        termStart: termStart || null,
+        maturityDate: maturityDate || null,
+        interestPaid: interestPaid || null,
+        // Only an inactive account's date is editable here; leave active ones alone.
+        ...(inactive ? { closedAt } : {}),
+      });
+      toast.success("Account updated.");
+      setEditing(false);
+      onChange();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  /** Mark inactive (with the chosen date) or, with null, reactivate. */
+  const setInactive = async (date: string | null) => {
+    try {
+      await api.updateAccount(account.id, { closedAt: date });
+      toast.success(
+        date
+          ? `“${account.name}” marked inactive. Any recurring rules on it are paused.`
+          : `“${account.name}” is active again.`
+      );
+      setClosing(false);
+      onChange();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
 
   if (!editing) {
     return (
-      <li className="flex items-start justify-between gap-3 py-2 text-sm">
-        <span className="min-w-0">
-          <span className="flex items-center gap-2 text-glass">
-            {account.name}
-            <span className="text-xs uppercase tracking-wider text-glass-3">{account.type}</span>
-            {account.isIsa && <IsaBadge />}
-            {account.isPremiumBonds && <PbBadge />}
-            {account.isInvestment && <InvestmentBadge />}
-            {account.isPension && <PensionBadge />}
-          </span>
-          {account.maturityDate && (
-            <span className="text-glass-3 mt-0.5 block text-xs">
-              {termLabel(account.termStart, account.maturityDate) &&
-                `${termLabel(account.termStart, account.maturityDate)} · `}
-              matures {formatDate(account.maturityDate)}
-              {nextInterestDate(account) &&
-                ` · interest ${formatDate(nextInterestDate(account)!)}`}
+      <li className="py-2 text-sm">
+        <div className="flex items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className={`flex items-center gap-2 ${inactive ? "text-glass-3" : "text-glass"}`}>
+              {account.name}
+              <span className="text-xs uppercase tracking-wider text-glass-3">{account.type}</span>
+              {account.isIsa && <IsaBadge />}
+              {account.isPremiumBonds && <PbBadge />}
+              {account.isInvestment && <InvestmentBadge />}
+              {account.isPension && <PensionBadge />}
             </span>
-          )}
-        </span>
-        <span className="flex items-center gap-4">
-          <span className="num text-glass-3">
-            {account.interestRate.toFixed(2)}%{" "}
-            {account.isInvestment ? `return · ${account.volatility.toFixed(0)}% vol` : "AER"}
+            {inactive && (
+              <span className="text-glass-3 mt-0.5 block text-xs">
+                Went inactive {formatDate(account.closedAt!)}
+              </span>
+            )}
+            {!inactive && account.maturityDate && (
+              <span className="text-glass-3 mt-0.5 block text-xs">
+                {termLabel(account.termStart, account.maturityDate) &&
+                  `${termLabel(account.termStart, account.maturityDate)} · `}
+                matures {formatDate(account.maturityDate)}
+                {nextInterestDate(account) &&
+                  ` · interest ${formatDate(nextInterestDate(account)!)}`}
+              </span>
+            )}
           </span>
-          <span className="num text-glass-3">opening {format(account.openingBalance)}</span>
-          <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => setEditing(true)}>
-            edit
-          </button>
-          <button className="text-xs text-[#ff6b8a] hover:underline" onClick={onRemove}>
-            delete
-          </button>
-        </span>
+          <span className="flex items-center gap-4">
+            <span className="num text-glass-3">
+              {account.interestRate.toFixed(2)}%{" "}
+              {account.isInvestment ? `return · ${account.volatility.toFixed(0)}% vol` : "AER"}
+            </span>
+            <span className="num text-glass-3">opening {format(account.openingBalance)}</span>
+            {inactive ? (
+              <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => setInactive(null)}>
+                reactivate
+              </button>
+            ) : (
+              <button
+                className="whitespace-nowrap text-xs text-glass-2 hover:underline"
+                onClick={() => setClosing(true)}
+              >
+                mark inactive
+              </button>
+            )}
+            <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => setEditing(true)}>
+              edit
+            </button>
+            <button className="text-xs text-[#ff6b8a] hover:underline" onClick={onRemove}>
+              delete
+            </button>
+          </span>
+        </div>
+        {closing && (
+          <div className="glass-nested mt-2 flex flex-wrap items-end gap-3 rounded-xl p-3">
+            <Field label="Went inactive on">
+              <input
+                type="date"
+                max={today}
+                value={closedAt}
+                onChange={(e) => setClosedAt(e.target.value)}
+              />
+            </Field>
+            <Button variant="primary" disabled={!closedAt} onClick={() => setInactive(closedAt)}>
+              Mark inactive
+            </Button>
+            <Button onClick={() => setClosing(false)}>Cancel</Button>
+            <p className="text-glass-3 w-full text-xs">
+              Nothing can be dated after this day, and any recurring rules on it are paused. Its
+              history is kept, and you can reactivate it later.
+            </p>
+          </div>
+        )}
       </li>
     );
   }
@@ -1245,6 +1331,16 @@ function AccountRow({
           onMaturity={setMaturityDate}
           onInterestPaid={setInterestPaid}
         />
+        {inactive && (
+          <Field label="Went inactive on">
+            <input
+              type="date"
+              max={today}
+              value={closedAt}
+              onChange={(e) => setClosedAt(e.target.value)}
+            />
+          </Field>
+        )}
         <Button variant="primary" onClick={save}>
           Save
         </Button>
@@ -1481,7 +1577,7 @@ function ValuationsManager({
         there.
       </p>
       <ul className="mb-4 divide-y divide-white/10">
-        {accounts.map((a) => {
+        {accounts.filter((a) => !isInactive(a)).map((a) => {
           const bal = balances.find((b) => b.id === a.id)?.balance ?? 0;
           return (
             <li key={a.id} className="py-2 text-sm">

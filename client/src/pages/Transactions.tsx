@@ -20,6 +20,8 @@ import { defaultPeriod, periodParams, type Period } from "../lib/period";
 import { formatDate } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
 import { toast } from "../lib/toast";
+import { firstActiveId, inactiveDateError } from "../lib/accounts";
+import { AccountOptions } from "../components/AccountOptions";
 
 type SortField = "date" | "amount" | "description";
 type TypeFilter = "" | TxnType | "transfer";
@@ -305,11 +307,7 @@ export default function Transactions({
         <Field label="Account">
           <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
             <option value="">All</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
+            <AccountOptions accounts={accounts} />
           </select>
         </Field>
         {allTags.length > 0 && (
@@ -695,7 +693,7 @@ function TransactionForm({
   );
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
   const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? "");
-  const [accountId, setAccountId] = useState(transaction?.accountId ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(transaction?.accountId ?? firstActiveId(accounts));
   const [description, setDescription] = useState(transaction?.description ?? "");
   const [note, setNote] = useState(transaction?.note ?? "");
   const [tags, setTags] = useState(transaction?.tags?.join(", ") ?? "");
@@ -726,6 +724,8 @@ function TransactionForm({
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) return setError("Enter a positive amount.");
     if (!accountId) return setError("Pick an account.");
+    const inactiveMsg = inactiveDateError(accounts.find((a) => a.id === accountId), date);
+    if (inactiveMsg) return setError(inactiveMsg);
 
     const base = {
       date: new Date(date).toISOString(),
@@ -817,11 +817,7 @@ function TransactionForm({
           )}
           <Field label="Account">
             <select className="w-full" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+              <AccountOptions accounts={accounts} />
             </select>
           </Field>
         </div>
@@ -936,10 +932,11 @@ function TransferForm({
   );
   const [amount, setAmount] = useState(transfer ? String(transfer.amount) : "");
   const [fromAccountId, setFromAccountId] = useState(
-    transfer?.fromAccountId ?? accounts[0]?.id ?? ""
+    transfer?.fromAccountId ?? firstActiveId(accounts)
   );
   const [toAccountId, setToAccountId] = useState(
-    transfer?.toAccountId ?? accounts[1]?.id ?? accounts[0]?.id ?? ""
+    transfer?.toAccountId ??
+      (firstActiveId(accounts, firstActiveId(accounts)) || firstActiveId(accounts))
   );
   const [note, setNote] = useState(transfer?.note ?? "");
   const [error, setError] = useState("");
@@ -952,6 +949,10 @@ function TransferForm({
     if (!Number.isFinite(value) || value <= 0) return setError("Enter a positive amount.");
     if (!fromAccountId || !toAccountId) return setError("Pick both accounts.");
     if (fromAccountId === toAccountId) return setError("From and to must be different accounts.");
+    for (const id of [fromAccountId, toAccountId]) {
+      const inactiveMsg = inactiveDateError(accounts.find((a) => a.id === id), date);
+      if (inactiveMsg) return setError(inactiveMsg);
+    }
 
     const payload = {
       date: new Date(date).toISOString(),
@@ -1015,11 +1016,7 @@ function TransferForm({
                 value={fromAccountId}
                 onChange={(e) => setFromAccountId(e.target.value)}
               >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
+                <AccountOptions accounts={accounts} />
               </select>
             </Field>
             <Field label="To account">
@@ -1028,11 +1025,7 @@ function TransferForm({
                 value={toAccountId}
                 onChange={(e) => setToAccountId(e.target.value)}
               >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
+                <AccountOptions accounts={accounts} />
               </select>
             </Field>
           </div>
@@ -1067,7 +1060,7 @@ function ImportModal({
   onDone: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(firstActiveId(accounts));
   const [result, setResult] = useState<{ imported: number; failed: number; errors: { line: number; message: string }[] } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1169,11 +1162,7 @@ function ImportModal({
           </div>
           <Field label="Import into account">
             <select className="w-full" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+              <AccountOptions accounts={accounts} />
             </select>
           </Field>
           <Field label="CSV file">
@@ -1359,8 +1348,10 @@ function RecurringTransferForm({
   onSaved: () => void;
 }) {
   const [amount, setAmount] = useState(rule ? String(rule.amount) : "");
-  const [fromAccountId, setFromAccountId] = useState(rule?.fromAccountId ?? accounts[0]?.id ?? "");
-  const [toAccountId, setToAccountId] = useState(rule?.toAccountId ?? accounts[1]?.id ?? "");
+  const [fromAccountId, setFromAccountId] = useState(rule?.fromAccountId ?? firstActiveId(accounts));
+  const [toAccountId, setToAccountId] = useState(
+    rule?.toAccountId ?? firstActiveId(accounts, firstActiveId(accounts))
+  );
   const [frequency, setFrequency] = useState<RecurFrequency>(rule?.frequency ?? "monthly");
   const [nextDate, setNextDate] = useState(
     rule?.nextDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
@@ -1377,6 +1368,13 @@ function RecurringTransferForm({
     if (!Number.isFinite(value) || value <= 0) return setError("Enter a positive amount.");
     if (!fromAccountId || !toAccountId) return setError("Pick both accounts.");
     if (fromAccountId === toAccountId) return setError("From and to must differ.");
+    // A paused rule can be edited freely; one that will run can't start after an account went inactive.
+    if (rule?.active !== false) {
+      for (const id of [fromAccountId, toAccountId]) {
+        const inactiveMsg = inactiveDateError(accounts.find((a) => a.id === id), nextDate);
+        if (inactiveMsg) return setError(inactiveMsg);
+      }
+    }
 
     const payload = {
       amount: value,
@@ -1428,20 +1426,12 @@ function RecurringTransferForm({
       <div className="grid grid-cols-2 gap-3">
         <Field label="From account">
           <select className="w-full" value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
+            <AccountOptions accounts={accounts} />
           </select>
         </Field>
         <Field label="To account">
           <select className="w-full" value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
+            <AccountOptions accounts={accounts} />
           </select>
         </Field>
       </div>
@@ -1485,7 +1475,7 @@ function RecurringForm({
   const [type, setType] = useState<TxnType>(rule?.type ?? "expense");
   const [amount, setAmount] = useState(rule ? String(rule.amount) : "");
   const [categoryId, setCategoryId] = useState(rule?.categoryId ?? "");
-  const [accountId, setAccountId] = useState(rule?.accountId ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(rule?.accountId ?? firstActiveId(accounts));
   const [frequency, setFrequency] = useState<RecurFrequency>(rule?.frequency ?? "monthly");
   const [nextDate, setNextDate] = useState(
     rule?.nextDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
@@ -1510,6 +1500,11 @@ function RecurringForm({
     if (!Number.isFinite(value) || value <= 0) return setError("Enter a positive amount.");
     if (!categoryId) return setError("Pick a category.");
     if (!accountId) return setError("Pick an account.");
+    // A paused rule can be edited freely; one that will run can't start after its account went inactive.
+    if (rule?.active !== false) {
+      const inactiveMsg = inactiveDateError(accounts.find((a) => a.id === accountId), nextDate);
+      if (inactiveMsg) return setError(inactiveMsg);
+    }
 
     const payload = {
       type,
@@ -1593,11 +1588,7 @@ function RecurringForm({
         </Field>
         <Field label="Account">
           <select className="w-full" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
+            <AccountOptions accounts={accounts} />
           </select>
         </Field>
       </div>

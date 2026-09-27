@@ -7,6 +7,7 @@ import { Button, Field, Modal, StatTile, Tile } from "../components/ui";
 import { formatDate } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
 import { toast } from "../lib/toast";
+import { isInactive } from "../lib/accounts";
 
 export default function Goals() {
   const { format } = useCurrency();
@@ -229,7 +230,8 @@ function GoalForm({
         <Field label="Track progress from">
           <select className="w-full" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
             <option value="">Manual amount</option>
-            {accounts.map((a) => (
+            {/* Inactive accounts only stay listed for a goal already tracking one. */}
+            {accounts.filter((a) => !isInactive(a) || a.id === goal?.accountId).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name} (use balance)
               </option>

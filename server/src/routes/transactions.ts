@@ -6,6 +6,7 @@ import { getUserId } from "../lib/auth.js";
 import { serialize, toNumber } from "../lib/serialize.js";
 import { materializeDue } from "../lib/recurring.js";
 import { resolveRange } from "../lib/range.js";
+import { assertOpenOn } from "../lib/accountClose.js";
 
 export const transactionsRouter = Router();
 
@@ -48,6 +49,7 @@ async function assertOwnership(userId: string, data: TxnInput) {
   ]);
   if (categoryCount < categoryIds.size) throw new HttpError(400, "Category not found");
   if (!account) throw new HttpError(400, "Account not found");
+  assertOpenOn(account, data.date);
 
   if (data.splits && data.splits.length > 0) {
     const sum = data.splits.reduce((s, x) => s + x.amount, 0);

@@ -5,6 +5,7 @@ import { asyncHandler, HttpError } from "../lib/http.js";
 import { getUserId } from "../lib/auth.js";
 import { serialize, serializeMany } from "../lib/serialize.js";
 import { resolveRange } from "../lib/range.js";
+import { assertOpenOn } from "../lib/accountClose.js";
 
 export const transfersRouter = Router();
 
@@ -21,11 +22,14 @@ const transferInput = z
     path: ["toAccountId"],
   });
 
-async function assertAccounts(userId: string, fromId: string, toId: string) {
-  const count = await prisma.account.count({
+/** Both accounts must be the user's and still open on the transfer's date. */
+async function assertAccounts(userId: string, fromId: string, toId: string, date: Date) {
+  const accounts = await prisma.account.findMany({
     where: { userId, id: { in: [fromId, toId] } },
+    select: { name: true, closedAt: true },
   });
-  if (count < 2) throw new HttpError(400, "Both accounts must belong to you.");
+  if (accounts.length < 2) throw new HttpError(400, "Both accounts must belong to you.");
+  for (const a of accounts) assertOpenOn(a, date);
 }
 
 const withAccounts = { fromAccount: true, toAccount: true } as const;
@@ -58,7 +62,7 @@ transfersRouter.post(
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
     const data = transferInput.parse(req.body);
-    await assertAccounts(userId, data.fromAccountId, data.toAccountId);
+    await assertAccounts(userId, data.fromAccountId, data.toAccountId, data.date);
     const transfer = await prisma.transfer.create({
       data: { ...data, userId },
       include: withAccounts,
@@ -74,7 +78,7 @@ transfersRouter.put(
     const data = transferInput.parse(req.body);
     const existing = await prisma.transfer.findFirst({ where: { id: req.params.id, userId } });
     if (!existing) throw new HttpError(404, "Transfer not found");
-    await assertAccounts(userId, data.fromAccountId, data.toAccountId);
+    await assertAccounts(userId, data.fromAccountId, data.toAccountId, data.date);
     const transfer = await prisma.transfer.update({
       where: { id: req.params.id },
       data,

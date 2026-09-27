@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { advance } from "./recurfreq.js";
+import { isAfterClose } from "./accountClose.js";
 
 export { advance };
 
@@ -11,6 +12,7 @@ export { advance };
 export async function materializeDue(userId: string, now = new Date()): Promise<number> {
   const due = await prisma.recurringTransaction.findMany({
     where: { userId, active: true, nextDate: { lte: now } },
+    include: { account: { select: { closedAt: true } } },
   });
 
   let created = 0;
@@ -28,7 +30,9 @@ export async function materializeDue(userId: string, now = new Date()): Promise<
       recurringId: string;
     }[] = [];
 
-    while (next <= now && (!r.endDate || next <= r.endDate)) {
+    // A closed account ends the rule: nothing posts after its close date.
+    const closedAt = r.account.closedAt;
+    while (next <= now && (!r.endDate || next <= r.endDate) && !isAfterClose(next, closedAt)) {
       toCreate.push({
         userId,
         date: new Date(next),
@@ -48,7 +52,7 @@ export async function materializeDue(userId: string, now = new Date()): Promise<
       created += toCreate.length;
     }
 
-    const stillActive = !(r.endDate && next > r.endDate);
+    const stillActive = !(r.endDate && next > r.endDate) && !isAfterClose(next, closedAt);
     await prisma.recurringTransaction.update({
       where: { id: r.id },
       data: { nextDate: next, active: stillActive },
@@ -58,6 +62,10 @@ export async function materializeDue(userId: string, now = new Date()): Promise<
   // Recurring transfers → real Transfer rows.
   const dueTransfers = await prisma.recurringTransfer.findMany({
     where: { userId, active: true, nextDate: { lte: now } },
+    include: {
+      fromAccount: { select: { closedAt: true } },
+      toAccount: { select: { closedAt: true } },
+    },
   });
   for (const r of dueTransfers) {
     let next = r.nextDate;
@@ -70,7 +78,10 @@ export async function materializeDue(userId: string, now = new Date()): Promise<
       note: string | null;
     }[] = [];
 
-    while (next <= now && (!r.endDate || next <= r.endDate)) {
+    // Either end being closed stops the transfer from its close date on.
+    const closed = (d: Date) =>
+      isAfterClose(d, r.fromAccount.closedAt) || isAfterClose(d, r.toAccount.closedAt);
+    while (next <= now && (!r.endDate || next <= r.endDate) && !closed(next)) {
       toCreate.push({
         userId,
         date: new Date(next),
@@ -87,7 +98,7 @@ export async function materializeDue(userId: string, now = new Date()): Promise<
       created += toCreate.length;
     }
 
-    const stillActive = !(r.endDate && next > r.endDate);
+    const stillActive = !(r.endDate && next > r.endDate) && !closed(next);
     await prisma.recurringTransfer.update({
       where: { id: r.id },
       data: { nextDate: next, active: stillActive },

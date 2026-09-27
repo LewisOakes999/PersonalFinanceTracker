@@ -5,6 +5,7 @@ import { asyncHandler, HttpError } from "../lib/http.js";
 import { getUserId } from "../lib/auth.js";
 import { serialize, serializeMany } from "../lib/serialize.js";
 import { materializeDue } from "../lib/recurring.js";
+import { assertOpenOn } from "../lib/accountClose.js";
 
 export const recurringRouter = Router();
 
@@ -21,13 +22,22 @@ const recurringInput = z.object({
   active: z.boolean().optional(),
 });
 
-async function assertOwnership(userId: string, categoryId: string, accountId: string) {
+/**
+ * The category and account must be the user's, and a rule that's going to run
+ * can't start after its account was closed — it would never post anything.
+ */
+async function assertOwnership(
+  userId: string,
+  data: { categoryId: string; accountId: string; nextDate: Date },
+  willRun: boolean
+) {
   const [category, account] = await Promise.all([
-    prisma.category.findFirst({ where: { id: categoryId, userId } }),
-    prisma.account.findFirst({ where: { id: accountId, userId } }),
+    prisma.category.findFirst({ where: { id: data.categoryId, userId } }),
+    prisma.account.findFirst({ where: { id: data.accountId, userId } }),
   ]);
   if (!category) throw new HttpError(400, "Category not found");
   if (!account) throw new HttpError(400, "Account not found");
+  if (willRun) assertOpenOn(account, data.nextDate);
 }
 
 const include = { category: true, account: true } as const;
@@ -61,7 +71,7 @@ recurringRouter.post(
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
     const data = recurringInput.parse(req.body);
-    await assertOwnership(userId, data.categoryId, data.accountId);
+    await assertOwnership(userId, data, data.active ?? true);
     const rule = await prisma.recurringTransaction.create({
       data: { ...data, userId },
       include,
@@ -82,7 +92,7 @@ recurringRouter.put(
       where: { id: req.params.id, userId },
     });
     if (!existing) throw new HttpError(404, "Recurring rule not found");
-    await assertOwnership(userId, data.categoryId, data.accountId);
+    await assertOwnership(userId, data, data.active ?? existing.active);
     const rule = await prisma.recurringTransaction.update({
       where: { id: req.params.id },
       data,

@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError } from "../lib/http.js";
+import { assertOpenOn } from "../lib/accountClose.js";
 import { getUserId } from "../lib/auth.js";
 import { parseCsv } from "../lib/csv.js";
 
@@ -36,19 +37,22 @@ importRouter.post(
       );
     }
 
-    // Resolve the target account (must belong to the user).
-    let accountId = typeof req.body.accountId === "string" ? req.body.accountId : "";
-    if (accountId) {
-      const owned = await prisma.account.findFirst({ where: { id: accountId, userId } });
-      if (!owned) throw new HttpError(400, "Account not found.");
-    } else {
-      const first = await prisma.account.findFirst({
-        where: { userId },
-        orderBy: { createdAt: "asc" },
-      });
-      if (!first) throw new HttpError(400, "No account exists to import into. Create one first.");
-      accountId = first.id;
+    // Resolve the target account (must belong to the user). With none given,
+    // fall back to the oldest account that's still open.
+    const requestedId = typeof req.body.accountId === "string" ? req.body.accountId : "";
+    const account = requestedId
+      ? await prisma.account.findFirst({ where: { id: requestedId, userId } })
+      : await prisma.account.findFirst({
+          where: { userId, closedAt: null },
+          orderBy: { createdAt: "asc" },
+        });
+    if (!account) {
+      throw new HttpError(
+        400,
+        requestedId ? "Account not found." : "No active account exists to import into. Create one first."
+      );
     }
+    const accountId = account.id;
 
     // Preload the user's categories for case-insensitive matching.
     const existing = await prisma.category.findMany({ where: { userId } });
@@ -78,6 +82,7 @@ importRouter.post(
         }
         const date = new Date(row.date);
         if (Number.isNaN(date.getTime())) throw new Error(`invalid date "${row.date}"`);
+        assertOpenOn(account, date);
 
         const provided = (row.category || "").trim();
         const desc = (row.description || "").toLowerCase();

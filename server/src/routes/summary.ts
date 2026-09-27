@@ -81,6 +81,7 @@ summaryRouter.get(
         termStart: account.termStart,
         maturityDate: account.maturityDate,
         interestPaid: account.interestPaid,
+        closedAt: account.closedAt,
         balance,
         baseBalance: round2(conv.toBase(balance, account.currency)),
       };
@@ -249,9 +250,10 @@ summaryRouter.get(
     const months = Math.min(Math.max(Number(req.query.months) || 12, 1), 60);
     const lookback = Math.min(Math.max(Number(req.query.lookback) || 6, 1), 24);
 
-    // Accounts and their current balances, plus liabilities & other assets.
+    // Open accounts and their current balances, plus liabilities & other assets.
+    // Closed accounts have no future, so they're left out of the projection.
     const [accounts, liabilityRows, assetRows] = await Promise.all([
-      prisma.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+      prisma.account.findMany({ where: { userId, closedAt: null }, orderBy: { createdAt: "asc" } }),
       prisma.liability.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
       prisma.asset.findMany({ where: { userId } }),
     ]);
@@ -555,7 +557,7 @@ summaryRouter.get(
     const months = Math.min(Math.max(Number(req.query.months) || 120, 1), 600);
 
     const allInvest = await prisma.account.findMany({
-      where: { userId, isInvestment: true },
+      where: { userId, isInvestment: true, closedAt: null },
       orderBy: { createdAt: "asc" },
     });
     const accountId = typeof req.query.accountId === "string" ? req.query.accountId : "";
