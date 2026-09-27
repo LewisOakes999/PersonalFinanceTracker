@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
   ShieldCheck,
   SlidersHorizontal,
@@ -170,10 +170,13 @@ function tabForSection(section?: string | null): SettingsTab {
 
 export default function Settings({
   focusSection,
+  focusAccountId,
   onReplayTour,
 }: {
   /** Section to open on arrival (accounts | assets | liabilities). */
   focusSection?: string | null;
+  /** An account to scroll to and open for editing on arrival (dashboard cog). */
+  focusAccountId?: string | null;
   onReplayTour?: () => void;
 } = {}) {
   const { currency, setCurrency, format } = useCurrency();
@@ -194,6 +197,13 @@ export default function Settings({
   useEffect(() => {
     if (focusSection) setTab(tabForSection(focusSection));
   }, [focusSection]);
+
+  // Cleared once the account has been shown, so flicking between tabs doesn't
+  // reopen its editor.
+  const [focusAccount, setFocusAccount] = useState(focusAccountId ?? null);
+  useEffect(() => {
+    if (focusAccountId) setFocusAccount(focusAccountId);
+  }, [focusAccountId]);
 
   const blurb: Record<SettingsTab, string> = {
     accounts: "What you own and owe — the basis of your net worth",
@@ -234,7 +244,13 @@ export default function Settings({
 
       {tab === "accounts" && (
         <>
-          <AccountsManager accounts={accounts} onChange={loadAccounts} format={format} />
+          <AccountsManager
+            accounts={accounts}
+            onChange={loadAccounts}
+            format={format}
+            focusAccountId={focusAccount}
+            onFocusHandled={() => setFocusAccount(null)}
+          />
           <AssetsManager defaultOpen={focusSection === "assets"} />
           <LiabilitiesManager defaultOpen={focusSection === "liabilities"} />
           <ValuationsManager accounts={accounts} format={format} />
@@ -874,10 +890,14 @@ function AccountsManager({
   accounts,
   onChange,
   format,
+  focusAccountId,
+  onFocusHandled,
 }: {
   accounts: Account[];
   onChange: () => void;
   format: (v: number) => string;
+  focusAccountId?: string | null;
+  onFocusHandled?: () => void;
 }) {
   const { currency: baseCurrency } = useCurrency();
   const [name, setName] = useState("");
@@ -941,6 +961,20 @@ function AccountsManager({
     }
   };
 
+  const active = accounts.filter((a) => !isInactive(a));
+  const inactive = accounts.filter(isInactive);
+  const row = (a: Account) => (
+    <AccountRow
+      key={a.id}
+      account={a}
+      format={format}
+      onChange={onChange}
+      onRemove={() => remove(a.id)}
+      focused={a.id === focusAccountId}
+      onFocused={onFocusHandled}
+    />
+  );
+
   return (
     <CollapsibleSection title="Accounts" defaultOpen>
       <p className="text-glass-3 mb-4 text-xs">
@@ -948,37 +982,29 @@ function AccountsManager({
         opening balance — transactions and transfers you record adjust it from there. The fixed-term
         fields are only for fixed-rate ISAs and bonds; leave them blank otherwise.
       </p>
-      <ul className="mb-4 divide-y divide-white/10">
-        {accounts
-          .filter((a) => !isInactive(a))
-          .map((a) => (
-            <AccountRow
-              key={a.id}
-              account={a}
-              format={format}
-              onChange={onChange}
-              onRemove={() => remove(a.id)}
-            />
-          ))}
-      </ul>
-      {accounts.some(isInactive) && (
-        <div className="mb-4">
-          <div className="text-glass-3 text-[11px] font-medium uppercase tracking-[0.08em]">
-            Inactive
-          </div>
-          <ul className="divide-y divide-white/10">
-            {accounts.filter(isInactive).map((a) => (
-              <AccountRow
-                key={a.id}
-                account={a}
-                format={format}
-                onChange={onChange}
-                onRemove={() => remove(a.id)}
-              />
-            ))}
-          </ul>
-        </div>
+      {accounts.length > 0 && (
+        <AccountGroup title="Active accounts" count={active.length}>
+          {active.length === 0 ? (
+            <li className="text-glass-3 py-3 text-xs">
+              No active accounts — reactivate one below or add a new one.
+            </li>
+          ) : (
+            active.map(row)
+          )}
+        </AccountGroup>
       )}
+      {inactive.length > 0 && (
+        <AccountGroup
+          title="Inactive accounts"
+          count={inactive.length}
+          hint="Hidden from the dashboard. Nothing can be dated after the day each went inactive."
+        >
+          {inactive.map(row)}
+        </AccountGroup>
+      )}
+      <h3 className="text-glass-2 mb-3 mt-5 text-[12px] font-semibold uppercase tracking-[0.06em]">
+        Add an account
+      </h3>
       <form onSubmit={add} data-tour="add-account" className="flex flex-wrap items-end gap-3">
         <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Joint Account" />
@@ -1083,18 +1109,80 @@ function AccountsManager({
   );
 }
 
+/** e.g. "2-year term · matures 01 Jan 2027 · interest 01 Oct 2026". */
+function termSummary(a: Account): string {
+  const term = termLabel(a.termStart, a.maturityDate);
+  const interest = nextInterestDate(a);
+  return [term, `matures ${formatDate(a.maturityDate!)}`, interest && `interest ${formatDate(interest)}`]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** One of the account lists — its own labelled panel, so active and inactive
+ *  accounts can't be mistaken for one another. */
+function AccountGroup({
+  title,
+  count,
+  hint,
+  children,
+}: {
+  title: string;
+  count: number;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="glass-nested mb-3 rounded-xl px-4 pb-1 pt-3">
+      <div className="border-b border-white/10 pb-2">
+        <h3 className="text-glass-2 text-[12px] font-semibold uppercase tracking-[0.06em]">
+          {title} <span className="num text-glass-3 ml-1 font-normal">{count}</span>
+        </h3>
+        {hint && <p className="text-glass-3 mt-0.5 text-[11px]">{hint}</p>}
+      </div>
+      <ul className="divide-y divide-white/10">{children}</ul>
+    </section>
+  );
+}
+
 function AccountRow({
   account,
   format,
   onChange,
   onRemove,
+  focused = false,
+  onFocused,
 }: {
   account: Account;
   format: (v: number) => string;
   onChange: () => void;
   onRemove: () => void;
+  /** Arrived here from this account's dashboard cog: open it and draw the eye. */
+  focused?: boolean;
+  onFocused?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const rowRef = useRef<HTMLLIElement>(null);
+  const [flash, setFlash] = useState(false);
+
+  // Runs once, when the row first appears — the list loads after the page, so
+  // this is the earliest the account can be scrolled to.
+  useEffect(() => {
+    if (!focused) return;
+    setEditing(true);
+    setFlash(true);
+    onFocused?.();
+    const frame = requestAnimationFrame(() =>
+      rowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" })
+    );
+    const timer = setTimeout(() => setFlash(false), 1800);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const rowCls = `-mx-2 rounded-lg px-2 text-sm transition-[background-color,box-shadow] duration-700 ${
+    flash ? "bg-[rgba(100,210,255,0.08)] ring-1 ring-[rgba(100,210,255,0.45)]" : ""
+  }`;
   const [name, setName] = useState(account.name);
   const [type, setType] = useState(account.type);
   const [currency, setCurrency] = useState(account.currency);
@@ -1157,58 +1245,58 @@ function AccountRow({
   };
 
   if (!editing) {
+    const details = [
+      inactive && `Went inactive ${formatDate(account.closedAt!)}`,
+      account.type.charAt(0).toUpperCase() + account.type.slice(1),
+      account.isInvestment
+        ? `${account.interestRate.toFixed(2)}% return · ${account.volatility.toFixed(0)}% vol`
+        : `${account.interestRate.toFixed(2)}% AER`,
+      `opening ${format(account.openingBalance)}`,
+      !inactive && account.maturityDate && termSummary(account),
+    ].filter(Boolean);
+
     return (
-      <li className="py-2 text-sm">
-        <div className="flex items-start justify-between gap-3">
-          <span className="min-w-0">
-            <span className={`flex items-center gap-2 ${inactive ? "text-glass-3" : "text-glass"}`}>
-              {account.name}
-              <span className="text-xs uppercase tracking-wider text-glass-3">{account.type}</span>
+      <li ref={rowRef} className={`py-2.5 ${rowCls}`}>
+        {/* Actions sit under the details on a phone, beside them from sm up. */}
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`font-medium ${inactive ? "text-glass-2" : "text-glass"}`}>
+                {account.name}
+              </span>
               {account.isIsa && <IsaBadge />}
               {account.isPremiumBonds && <PbBadge />}
               {account.isInvestment && <InvestmentBadge />}
               {account.isPension && <PensionBadge />}
-            </span>
-            {inactive && (
-              <span className="text-glass-3 mt-0.5 block text-xs">
-                Went inactive {formatDate(account.closedAt!)}
-              </span>
-            )}
-            {!inactive && account.maturityDate && (
-              <span className="text-glass-3 mt-0.5 block text-xs">
-                {termLabel(account.termStart, account.maturityDate) &&
-                  `${termLabel(account.termStart, account.maturityDate)} · `}
-                matures {formatDate(account.maturityDate)}
-                {nextInterestDate(account) &&
-                  ` · interest ${formatDate(nextInterestDate(account)!)}`}
-              </span>
-            )}
-          </span>
-          <span className="flex items-center gap-4">
-            <span className="num text-glass-3">
-              {account.interestRate.toFixed(2)}%{" "}
-              {account.isInvestment ? `return · ${account.volatility.toFixed(0)}% vol` : "AER"}
-            </span>
-            <span className="num text-glass-3">opening {format(account.openingBalance)}</span>
+            </div>
+            <div className="text-glass-3 mt-0.5 text-xs">{details.join(" · ")}</div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3 pt-0.5 text-xs">
             {inactive ? (
-              <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => setInactive(null)}>
+              <button className="text-[#64d2ff] hover:underline" onClick={() => setInactive(null)}>
                 reactivate
               </button>
             ) : (
+              <button className="text-[#64d2ff] hover:underline" onClick={() => setEditing(true)}>
+                edit
+              </button>
+            )}
+            {inactive ? (
+              <button className="text-glass-2 hover:underline" onClick={() => setEditing(true)}>
+                edit
+              </button>
+            ) : (
               <button
-                className="whitespace-nowrap text-xs text-glass-2 hover:underline"
+                className="whitespace-nowrap text-glass-2 hover:underline"
                 onClick={() => setClosing(true)}
               >
                 mark inactive
               </button>
             )}
-            <button className="text-xs text-[#64d2ff] hover:underline" onClick={() => setEditing(true)}>
-              edit
-            </button>
-            <button className="text-xs text-[#ff6b8a] hover:underline" onClick={onRemove}>
+            <button className="text-[#ff6b8a] hover:underline" onClick={onRemove}>
               delete
             </button>
-          </span>
+          </div>
         </div>
         {closing && (
           <div className="glass-nested mt-2 flex flex-wrap items-end gap-3 rounded-xl p-3">
@@ -1235,7 +1323,7 @@ function AccountRow({
   }
 
   return (
-    <li className="py-3">
+    <li ref={rowRef} className={`py-3 ${rowCls}`}>
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Name">
           <input className="w-40" value={name} onChange={(e) => setName(e.target.value)} />

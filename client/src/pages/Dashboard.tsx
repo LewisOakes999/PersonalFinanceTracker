@@ -14,6 +14,7 @@ import {
   Home,
   Percent,
   PiggyBank,
+  Settings as SettingsIcon,
   ShoppingBag,
   ShoppingCart,
   Tag,
@@ -110,12 +111,15 @@ export default function Dashboard({
   onManage,
   onGoTo,
   onViewAccount,
+  onEditAccount,
 }: {
   /** Open Settings with the given section (accounts | assets | liabilities) expanded. */
   onManage?: (section: string) => void;
   /** Navigate to another tab (e.g. "transactions"). */
   onGoTo?: (tab: string) => void;
   onViewAccount?: (accountId: string) => void;
+  /** Open Settings on this account, ready to edit. */
+  onEditAccount?: (accountId: string) => void;
 }) {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
@@ -282,7 +286,7 @@ export default function Dashboard({
           sub={
             balances && balances.liabilitiesTotal > 0
               ? `${format(balances.assets)} assets − ${format(balances.liabilitiesTotal)} owed`
-              : `${balances?.accounts.length ?? 0} accounts`
+              : activeAccountsLabel(balances?.accounts ?? [])
           }
         />
       </div>
@@ -546,6 +550,7 @@ export default function Dashboard({
                 amount={`${a.balance < 0 ? "−" : ""}${formatCurrency(Math.abs(a.balance), a.currency)}`}
                 amountColor={a.balance < 0 ? EXPENSE : undefined}
                 onClick={onViewAccount ? () => onViewAccount(a.id) : undefined}
+                onSettings={onEditAccount ? () => onEditAccount(a.id) : undefined}
               />
             ))}
             {/* Inactive accounts are hidden, but money still left in them counts
@@ -698,6 +703,7 @@ function NetWorthRow({
   amount,
   amountColor,
   onClick,
+  onSettings,
 }: {
   icon: LucideIcon;
   iconTint: string;
@@ -707,8 +713,10 @@ function NetWorthRow({
   amount: string;
   amountColor?: string;
   onClick?: () => void;
+  /** Adds a cog beside the row that opens this item's settings. */
+  onSettings?: () => void;
 }) {
-  return (
+  const row = (
     <div
       title={title || undefined}
       onClick={onClick}
@@ -724,9 +732,9 @@ function NetWorthRow({
             }
           : undefined
       }
-      className={`-mx-1.5 flex items-center justify-between gap-2 rounded-md px-1.5 py-[5px] ${
-        onClick ? "cursor-pointer transition-colors hover:bg-white/[0.06]" : ""
-      }`}
+      className={`flex items-center justify-between gap-2 rounded-md px-1.5 py-[5px] ${
+        onSettings ? "min-w-0 flex-1" : "-mx-1.5"
+      } ${onClick ? "cursor-pointer transition-colors hover:bg-white/[0.06]" : ""}`}
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span
@@ -746,6 +754,30 @@ function NetWorthRow({
       </span>
     </div>
   );
+  if (!onSettings) return row;
+
+  // The cog sits beside the row rather than inside it, so it's its own button
+  // and clicking the row still does what the row does.
+  return (
+    <div className="-mx-1.5 flex items-center">
+      {row}
+      <button
+        type="button"
+        onClick={onSettings}
+        aria-label={`Settings for ${name}`}
+        title={`Settings for ${name}`}
+        className="text-glass-3 hover:text-glass ml-0.5 shrink-0 rounded-md p-1 transition-colors hover:bg-white/[0.06]"
+      >
+        <SettingsIcon size={13} strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+/** "4 accounts" — counting only active ones, since inactive accounts are hidden. */
+function activeAccountsLabel(accounts: { closedAt?: string | null }[]): string {
+  const n = accounts.filter((a) => !isInactive(a)).length;
+  return `${n} account${n === 1 ? "" : "s"}`;
 }
 
 function Empty({ children }: { children: ReactNode }) {

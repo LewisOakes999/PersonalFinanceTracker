@@ -140,6 +140,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [txnAccountId, setTxnAccountId] = useState<string | null>(null);
   const [settingsFocus, setSettingsFocus] = useState<string | null>(null);
+  const [settingsAccountId, setSettingsAccountId] = useState<string | null>(null);
   const { user, logout } = useAuth();
 
   const go = (id: Tab) => {
@@ -147,6 +148,7 @@ export default function App() {
     setNavOpen(false);
     setTxnAccountId(null); // sidebar/nav navigation clears any account filter
     setSettingsFocus(null);
+    setSettingsAccountId(null);
   };
 
   // Open Transactions pre-filtered to a specific account (from a dashboard tile).
@@ -159,6 +161,15 @@ export default function App() {
   // Open Settings with a specific section expanded (from dashboard shortcuts).
   const manage = (section: string) => {
     setSettingsFocus(section);
+    setSettingsAccountId(null);
+    setTab("settings");
+    setNavOpen(false);
+  };
+
+  // Open Settings on one account, ready to edit (from its dashboard cog).
+  const editAccount = (accountId: string) => {
+    setSettingsFocus("accounts");
+    setSettingsAccountId(accountId);
     setTab("settings");
     setNavOpen(false);
   };
@@ -214,7 +225,12 @@ export default function App() {
         {/* Main content */}
         <main className="min-w-0 overflow-y-auto px-4 pb-10 pt-2 md:px-[30px] md:pl-1.5 md:pt-[26px]">
           {tab === "dashboard" && (
-            <Dashboard onManage={manage} onGoTo={(t) => go(t as Tab)} onViewAccount={viewAccount} />
+            <Dashboard
+              onManage={manage}
+              onGoTo={(t) => go(t as Tab)}
+              onViewAccount={viewAccount}
+              onEditAccount={editAccount}
+            />
           )}
           {tab === "transactions" && <Transactions initialAccountId={txnAccountId ?? undefined} />}
           {tab === "analytics" && <Analytics />}
@@ -223,7 +239,11 @@ export default function App() {
           {tab === "forecast" && <Forecast />}
           {tab === "tax" && <Tax />}
           {tab === "settings" && (
-            <Settings focusSection={settingsFocus} onReplayTour={replayTour} />
+            <Settings
+              focusSection={settingsFocus}
+              focusAccountId={settingsAccountId}
+              onReplayTour={replayTour}
+            />
           )}
         </main>
 

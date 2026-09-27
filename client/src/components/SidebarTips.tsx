@@ -108,8 +108,8 @@ export function SidebarTips() {
         }
 
         // Net worth.
-        if (balances?.accounts?.length) {
-          const n = balances.accounts.length;
+        const n = balances?.accounts?.filter((a) => !a.closedAt).length ?? 0;
+        if (balances && n > 0) {
           personal.push(`Your net worth is ${format(balances.overall)} across ${n} account${n > 1 ? "s" : ""}.`);
         }
       } catch {
