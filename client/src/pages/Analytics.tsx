@@ -33,12 +33,15 @@ const EXPENSE = "#ff6b8a";
 
 /** The bit of Recharts' click payload we rely on. */
 type BarClickState = { activePayload?: { payload?: { month?: string } }[] } | null;
+/** Which side of the ledger the category chart and drill-down are showing. */
+type CatType = "expense" | "income";
 const NETWORTH = "#64d2ff";
 const AXIS = "rgba(245,245,247,0.45)";
 
 export default function Analytics() {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
+  const [catType, setCatType] = useState<CatType>("expense");
   const [byCategory, setByCategory] = useState<CategoryTotal[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [netWorth, setNetWorth] = useState<NetWorthPoint[]>([]);
@@ -46,12 +49,23 @@ export default function Analytics() {
   const [drill, setDrill] = useState<Transaction[]>([]);
   const [subs, setSubs] = useState<Subscriptions | null>(null);
 
+  const isIncome = catType === "income";
+
   useEffect(() => {
-    api.byCategory(periodParams(period), "expense").then((data) => {
+    api.byCategory(periodParams(period), catType).then((data) => {
       setByCategory(data);
       setSelectedCat(data[0] ?? null);
     });
-  }, [period]);
+  }, [period, catType]);
+
+  /** Switching income/expenses drops the old categories so the drill-down
+   *  below never shows the previous side's transactions while loading. */
+  const selectCatType = (t: CatType) => {
+    if (t === catType) return;
+    setCatType(t);
+    setByCategory([]);
+    setSelectedCat(null);
+  };
 
   useEffect(() => {
     api.trend(12).then(setTrend);
@@ -65,9 +79,13 @@ export default function Analytics() {
       return;
     }
     api
-      .listTransactions({ ...periodParams(period), categoryId: selectedCat.categoryId })
+      .listTransactions({
+        ...periodParams(period),
+        categoryId: selectedCat.categoryId,
+        type: catType,
+      })
       .then(setDrill);
-  }, [selectedCat, period]);
+  }, [selectedCat, period, catType]);
 
   const trendData = useMemo(
     () => trend.map((t) => ({ ...t, label: shortMonthLabel(t.month) })),
@@ -276,11 +294,37 @@ export default function Analytics() {
       </Tile>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Spending by category (horizontal bars) */}
+        {/* Income / spending by category (horizontal bars) */}
         <Tile className="p-[22px]">
-          <SectionTitle>Spending by Category — {period.label}</SectionTitle>
+          {/* One toggle drives this chart and the drill-down beside it. */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+              {isIncome ? "Income" : "Spending"} by Category — {period.label}
+            </h2>
+            <div className="flex gap-1" role="group" aria-label="Income or expenses">
+              {(["expense", "income"] as CatType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => selectCatType(t)}
+                  aria-pressed={catType === t}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    catType === t
+                      ? t === "income"
+                        ? "border-[#34e0c4] bg-[#34e0c4]/10 text-[#34e0c4]"
+                        : "border-[#ff6b8a] bg-[#ff6b8a]/10 text-[#ff9bae]"
+                      : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
+                  }`}
+                >
+                  {t === "income" ? "Income" : "Expenses"}
+                </button>
+              ))}
+            </div>
+          </div>
           {byCategory.length === 0 ? (
-            <div className="text-glass-3 py-10 text-center text-sm">No expenses this month.</div>
+            <div className="text-glass-3 py-10 text-center text-sm">
+              No {isIncome ? "income" : "expenses"} in {period.label}.
+            </div>
           ) : (
             <div style={{ height: Math.max(byCategory.length * 38, 120) }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -304,7 +348,7 @@ export default function Analytics() {
                     cursor={{ fill: "rgba(255,255,255,0.05)" }}
                     formatter={(v: number) => format(v)}
                   />
-                  <Bar dataKey="total" name="Spent" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="total" name={isIncome ? "Received" : "Spent"} radius={[0, 4, 4, 0]}>
                     {byCategory.map((c) => (
                       <Cell
                         key={c.categoryId}
@@ -320,9 +364,9 @@ export default function Analytics() {
           )}
         </Tile>
 
-        {/* Category drill-down */}
+        {/* Category drill-down — follows the toggle above */}
         <Tile className="p-[22px]">
-          <SectionTitle>Category Drill-down</SectionTitle>
+          <SectionTitle>{isIncome ? "Income" : "Expense"} Drill-down</SectionTitle>
           <div className="mb-3 flex items-center">
             <select
               value={selectedCat?.categoryId ?? ""}
@@ -343,7 +387,7 @@ export default function Analytics() {
           </div>
           {drill.length === 0 ? (
             <div className="text-glass-3 py-10 text-center text-sm">
-              No transactions for this category and month.
+              No {isIncome ? "income" : "expenses"} for this category in {period.label}.
             </div>
           ) : (
             <ul className="max-h-72 overflow-auto">
@@ -356,7 +400,8 @@ export default function Analytics() {
                     <div className="text-glass">{t.description || t.category.name}</div>
                     <div className="text-glass-3 text-xs">{formatDate(t.date)}</div>
                   </div>
-                  <span className="num" style={{ color: EXPENSE }}>
+                  <span className="num" style={{ color: isIncome ? INCOME : EXPENSE }}>
+                    {isIncome ? "+" : "−"}
                     {format(t.amount)}
                   </span>
                 </li>

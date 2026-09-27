@@ -153,6 +153,19 @@ export default function Transactions({
     };
   }, [feed, rates, currency]);
 
+  // "All time" is the page's default period, so it doesn't count as a filter.
+  const filtersActive = Boolean(
+    search || typeFilter || categoryFilter || accountFilter || tagFilter || period.mode !== "all"
+  );
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("");
+    setCategoryFilter("");
+    setAccountFilter("");
+    setTagFilter("");
+    setPeriod(defaultPeriod("all"));
+  };
+
   const toggleSort = (field: SortField) => {
     if (sort === field) setOrder(order === "asc" ? "desc" : "asc");
     else {
@@ -314,6 +327,15 @@ export default function Transactions({
         <Field label="Period">
           <PeriodSelector value={period} onChange={setPeriod} allowAll />
         </Field>
+        {filtersActive && (
+          <Button
+            className="inline-flex items-center gap-1.5"
+            onClick={clearFilters}
+            title="Reset every filter, including the period"
+          >
+            <X size={13} strokeWidth={2} /> Clear all filters
+          </Button>
+        )}
       </Tile>
 
       {/* Totals for the current view — updates with every filter. */}
@@ -484,20 +506,10 @@ export default function Transactions({
             {feed.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center">
-                  {search || typeFilter || categoryFilter || accountFilter || tagFilter ? (
+                  {filtersActive ? (
                     <div className="flex flex-col items-center gap-3">
                       <span className="text-glass-3">Nothing matches your filters.</span>
-                      <Button
-                        onClick={() => {
-                          setSearch("");
-                          setTypeFilter("");
-                          setCategoryFilter("");
-                          setAccountFilter("");
-                          setTagFilter("");
-                        }}
-                      >
-                        Clear filters
-                      </Button>
+                      <Button onClick={clearFilters}>Clear all filters</Button>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-3">
@@ -1229,8 +1241,25 @@ function RecurringManager({
     onChange();
   };
 
+  // Back out of a form to the list — the escape hatch for opening the wrong rule.
+  const back = () => {
+    setEditing(null);
+    setEditingXfer(null);
+  };
+  // Mirrors the render order below, where `editing` wins over `editingXfer`.
+  const inForm = Boolean(editing || editingXfer);
+  const title = editing
+    ? editing === "new"
+      ? "New recurring transaction"
+      : "Edit recurring transaction"
+    : editingXfer
+      ? editingXfer === "new"
+        ? "New recurring transfer"
+        : "Edit recurring transfer"
+      : "Recurring";
+
   return (
-    <Modal title="Recurring" onClose={onClose}>
+    <Modal title={title} onClose={onClose} onBack={inForm ? back : undefined}>
       {editing ? (
         <RecurringForm
           rule={editing === "new" ? null : editing}

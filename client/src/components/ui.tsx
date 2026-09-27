@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, KeyboardEvent, ReactNode } from "react";
 import { useState } from "react";
-import { X, ChevronDown } from "lucide-react";
+import { ArrowLeft, X, ChevronDown } from "lucide-react";
 
 /** Small account-type badge (ISA / PB / PEN / INV). One neutral style for all —
  *  the badge is metadata, not a status, so it doesn't earn a colour. */
@@ -186,14 +186,17 @@ export function MonthSelector({
   );
 }
 
-/** A centred modal on a frosted glass panel. */
+/** A centred modal on a frosted glass panel. Pass `onBack` when the modal is
+ *  showing a sub-view, so there's a one-click way out of it that isn't Close. */
 export function Modal({
   title,
   onClose,
+  onBack,
   children,
 }: {
   title: string;
   onClose: () => void;
+  onBack?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -206,10 +209,24 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-          <h2 className="text-glass text-sm font-semibold uppercase tracking-wider">{title}</h2>
+          <div className="flex min-w-0 items-center gap-2">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="text-glass-3 hover:text-glass -ml-1 shrink-0"
+                aria-label="Back"
+                title="Back"
+              >
+                <ArrowLeft size={16} strokeWidth={2} />
+              </button>
+            )}
+            <h2 className="text-glass truncate text-sm font-semibold uppercase tracking-wider">
+              {title}
+            </h2>
+          </div>
           <button
             onClick={onClose}
-            className="text-glass-3 hover:text-glass"
+            className="text-glass-3 hover:text-glass shrink-0"
             aria-label="Close"
           >
             <X size={16} strokeWidth={2} />
