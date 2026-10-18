@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError } from "../lib/http.js";
 import { getUserId } from "../lib/auth.js";
@@ -16,6 +16,17 @@ const DISTANCE_KINDS = new Set<Kind>(["run", "cycle", "swim", "walk"]);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const setsInput = z
+  .array(
+    z.object({
+      exercise: z.string().trim().min(1).max(60),
+      reps: z.number().int().min(1).max(1000),
+      weightKg: z.number().min(0).max(1000),
+    })
+  )
+  .max(300)
+  .default([]);
+
 const workoutInput = z.object({
   date: z.coerce.date(),
   kind: z.enum(WORKOUT_KINDS),
@@ -23,16 +34,7 @@ const workoutInput = z.object({
   durationSec: z.number().int().min(1).max(24 * 60 * 60).nullable().optional(),
   distanceKm: z.number().positive().max(1000).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
-  sets: z
-    .array(
-      z.object({
-        exercise: z.string().trim().min(1).max(60),
-        reps: z.number().int().min(1).max(1000),
-        weightKg: z.number().min(0).max(1000),
-      })
-    )
-    .max(300)
-    .default([]),
+  sets: setsInput,
 });
 type WorkoutInput = z.infer<typeof workoutInput>;
 
@@ -155,6 +157,13 @@ fitnessRouter.get(
 const weightInput = z.object({
   date: z.coerce.date(),
   weightKg: z.number().min(20).max(400),
+  bodyFatPct: z.number().min(2).max(75).nullable().optional(),
+});
+
+const shapeWeight = (r: { weightKg: Prisma.Decimal; bodyFatPct: Prisma.Decimal | null }) => ({
+  ...r,
+  weightKg: toNumber(r.weightKg),
+  bodyFatPct: r.bodyFatPct === null ? null : toNumber(r.bodyFatPct),
 });
 
 fitnessRouter.get(
@@ -164,7 +173,7 @@ fitnessRouter.get(
       where: { userId: getUserId(req) },
       orderBy: { date: "asc" },
     });
-    res.json(rows.map((r) => ({ ...r, weightKg: toNumber(r.weightKg) })));
+    res.json(rows.map(shapeWeight));
   })
 );
 
@@ -172,16 +181,17 @@ fitnessRouter.post(
   "/body-weights",
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
-    const { date, weightKg } = weightInput.parse(req.body);
+    const { date, weightKg, bodyFatPct = null } = weightInput.parse(req.body);
     if (date.getTime() > Date.now() + DAY_MS) {
       throw new HttpError(400, "A weigh-in can't be dated in the future.");
     }
+    // Logging a day again replaces that day's entry outright, body fat included.
     const row = await prisma.bodyWeight.upsert({
       where: { userId_date: { userId, date } },
-      update: { weightKg },
-      create: { userId, date, weightKg },
+      update: { weightKg, bodyFatPct },
+      create: { userId, date, weightKg, bodyFatPct },
     });
-    res.status(201).json({ ...row, weightKg: toNumber(row.weightKg) });
+    res.status(201).json(shapeWeight(row));
   })
 );
 
@@ -192,6 +202,70 @@ fitnessRouter.delete(
       where: { id: req.params.id, userId: getUserId(req) },
     });
     if (result.count === 0) throw new HttpError(404, "Weigh-in not found");
+    res.status(204).end();
+  })
+);
+
+// Presets — saved workouts to start from. Saving under an existing name
+// updates that preset, which is also how a preset is edited.
+const presetInput = z.object({
+  name: z.string().trim().min(1).max(60),
+  kind: z.enum(WORKOUT_KINDS),
+  title: z.string().trim().max(80).default(""),
+  durationSec: z.number().int().min(1).max(24 * 60 * 60).nullable().optional(),
+  distanceKm: z.number().positive().max(1000).nullable().optional(),
+  sets: setsInput,
+});
+
+type PresetRow = Prisma.WorkoutPresetGetPayload<object>;
+const shapePreset = (p: PresetRow) => ({
+  ...p,
+  distanceKm: p.distanceKm === null ? null : toNumber(p.distanceKm),
+});
+
+fitnessRouter.get(
+  "/presets",
+  asyncHandler(async (req, res) => {
+    const presets = await prisma.workoutPreset.findMany({
+      where: { userId: getUserId(req) },
+      orderBy: { name: "asc" },
+    });
+    res.json(presets.map(shapePreset));
+  })
+);
+
+fitnessRouter.post(
+  "/presets",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const data = presetInput.parse(req.body);
+    const strength = data.kind === "strength";
+    if (strength && data.sets.length === 0) {
+      throw new HttpError(400, "Add at least one exercise with a set before saving it as a preset.");
+    }
+    const fields = {
+      kind: data.kind,
+      title: data.title,
+      durationSec: data.durationSec ?? null,
+      distanceKm: DISTANCE_KINDS.has(data.kind) ? (data.distanceKm ?? null) : null,
+      sets: strength ? data.sets : [],
+    };
+    const preset = await prisma.workoutPreset.upsert({
+      where: { userId_name: { userId, name: data.name } },
+      update: fields,
+      create: { userId, name: data.name, ...fields },
+    });
+    res.status(201).json(shapePreset(preset));
+  })
+);
+
+fitnessRouter.delete(
+  "/presets/:id",
+  asyncHandler(async (req, res) => {
+    const result = await prisma.workoutPreset.deleteMany({
+      where: { id: req.params.id, userId: getUserId(req) },
+    });
+    if (result.count === 0) throw new HttpError(404, "Preset not found");
     res.status(204).end();
   })
 );

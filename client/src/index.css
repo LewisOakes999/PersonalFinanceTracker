@@ -13,6 +13,7 @@
     --lg-text: #f5f5f7;
     --lg-text-2: rgba(245, 245, 247, 0.62);
     --lg-text-3: rgba(245, 245, 247, 0.45);
+    --lg-surface-solid: #18181d; /* opaque panels, for dense forms over busy pages */
   }
 
   html,
@@ -102,6 +103,12 @@
   .glass:hover {
     border-color: rgba(255, 255, 255, 0.16);
   }
+  /* An opaque glass panel: same edges and shadow, nothing showing through. */
+  .glass-solid {
+    background: var(--lg-surface-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 
   /* Lighter nested surfaces (account cards, chips, table rows). */
   .glass-nested {
@@ -147,6 +154,7 @@
   --lg-text: #17171c;
   --lg-text-2: rgba(23, 23, 28, 0.66);
   --lg-text-3: rgba(23, 23, 28, 0.46);
+  --lg-surface-solid: #ffffff;
 }
 [data-theme="light"] body {
   background: #eef1f6;

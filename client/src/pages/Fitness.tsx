@@ -15,16 +15,18 @@ import {
 } from "recharts";
 import { CalendarCheck, Dumbbell, Plus, Route, Scale, type LucideIcon } from "lucide-react";
 import { api } from "../api/client";
-import type { BodyWeight, Workout, WorkoutKind } from "../types";
+import type { BodyWeight, Workout, WorkoutKind, WorkoutPreset } from "../types";
 import { Button, Field, SectionTitle, StatTile, Tile } from "../components/ui";
 import { LogWorkoutModal } from "../components/LogWorkoutModal";
 import {
+  byBodyFat,
   cardioBests,
   cardioSessions,
   exerciseProgress,
   formatMinutes,
   formatPace,
   kindInfo,
+  leanMassKg,
   movingAverage,
   paceHigherIsBetter,
   streak,
@@ -65,13 +67,16 @@ const kg = (n: number) => `${parseFloat(n.toFixed(2))} kg`;
 export default function Fitness() {
   const [workouts, setWorkouts] = useState<Workout[] | null>(null);
   const [weights, setWeights] = useState<BodyWeight[]>([]);
+  const [presets, setPresets] = useState<WorkoutPreset[]>([]);
   const [goal, setGoal] = useState(3);
   const [tab, setTab] = useState<FitTab>("overview");
   const [editing, setEditing] = useState<Workout | "new" | null>(null);
 
   const loadWorkouts = () => api.listWorkouts().then((w) => (setWorkouts(w), w));
   const loadWeights = () => api.listBodyWeights().then(setWeights);
+  const loadPresets = () => api.listPresets().then(setPresets).catch(() => setPresets([]));
   useEffect(() => {
+    loadPresets();
     loadWorkouts().catch((e) => toast.error((e as Error).message));
     loadWeights().catch(() => setWeights([]));
     api
@@ -178,6 +183,8 @@ export default function Fitness() {
         <LogWorkoutModal
           workout={editing === "new" ? null : editing}
           exerciseNames={progress.map((p) => p.name)}
+          presets={presets}
+          onPresetsChanged={loadPresets}
           onClose={() => setEditing(null)}
           onSaved={saved}
         />
@@ -743,19 +750,30 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   const [value, setValue] = useState("");
+  const [fat, setFat] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Logging a day again replaces it, so show what's there for the chosen day
+  // rather than silently overwriting it (or quietly dropping its body fat).
+  const existing = weights.find((w) => w.date.slice(0, 10) === date);
+  useEffect(() => {
+    setValue(existing ? String(existing.weightKg) : "");
+    setFat(existing?.bodyFatPct != null ? String(existing.bodyFatPct) : "");
+  }, [date, existing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const log = async (e: FormEvent) => {
     e.preventDefault();
     const weightKg = Number(value);
     if (!value.trim() || !Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400)
       return toast.error("Enter your weight in kg.");
+    const bodyFatPct = fat.trim() === "" ? null : Number(fat);
+    if (bodyFatPct !== null && (!Number.isFinite(bodyFatPct) || bodyFatPct < 2 || bodyFatPct > 75))
+      return toast.error("Body fat should be a percentage between 2 and 75.");
     if (date > today) return toast.error("A weigh-in can't be dated in the future.");
     setSaving(true);
     try {
-      await api.logBodyWeight({ date: new Date(date).toISOString(), weightKg });
-      toast.success("Weight logged.");
-      setValue("");
+      await api.logBodyWeight({ date: new Date(date).toISOString(), weightKg, bodyFatPct });
+      toast.success(existing ? "Weigh-in updated." : "Weigh-in logged.");
       onChanged();
     } catch (err) {
       toast.error((err as Error).message);
@@ -770,17 +788,27 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
     onChanged();
   };
 
-  const trend = movingAverage(weights);
+  // Gaining or losing isn't good or bad in itself, so changes stay neutral.
+  const signedUnit = (n: number | null, unit: (v: number) => string) =>
+    n === null ? "—" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${unit(Math.abs(n))}`;
+  const pct = (n: number) => `${parseFloat(n.toFixed(1))}%`;
+
   const latest = weights[weights.length - 1];
   const first = weights[0];
-  const chart = weights.map((w, i) => ({
-    label: shortDate(w.date),
-    kg: w.weightKg,
-    trend: Math.round(trend[i] * 10) / 10,
-  }));
+  const trend = movingAverage(weights);
+  const chart = weights.map((w, i) => ({ label: shortDate(w.date), kg: w.weightKg, trend: Math.round(trend[i] * 10) / 10 }));
   const axis = fittedAxis(chart.flatMap((d) => [d.kg, d.trend]));
-  // Gaining or losing isn't good or bad in itself, so changes stay neutral.
-  const change = (n: number | null) => (n === null ? "—" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${kg(Math.abs(n))}`);
+
+  const fatPoints = weights.filter((w) => w.bodyFatPct != null);
+  const fatTrend = movingAverage(weights, 7, byBodyFat);
+  const fatChart = fatPoints.map((w, i) => ({
+    label: shortDate(w.date),
+    pct: w.bodyFatPct!,
+    trend: Math.round(fatTrend[i] * 10) / 10,
+  }));
+  const fatAxis = fittedAxis(fatChart.flatMap((d) => [d.pct, d.trend]));
+  const latestFat = fatPoints[fatPoints.length - 1];
+  const firstFat = fatPoints[0];
 
   return (
     <>
@@ -792,7 +820,7 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
           <Field label="Weight (kg)">
             <input
               type="number"
-              step="0.1"
+              step="any"
               min="20"
               className="num w-28"
               placeholder={latest ? String(latest.weightKg) : "e.g. 80.5"}
@@ -800,10 +828,26 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
               onChange={(e) => setValue(e.target.value)}
             />
           </Field>
+          <Field label="Body fat % (optional)">
+            <input
+              type="number"
+              step="any"
+              min="2"
+              max="75"
+              className="num w-28"
+              placeholder={latestFat ? String(latestFat.bodyFatPct) : "e.g. 18.5"}
+              value={fat}
+              onChange={(e) => setFat(e.target.value)}
+            />
+          </Field>
           <Button type="submit" variant="primary" disabled={saving}>
-            {saving ? "Saving…" : "Log weight"}
+            {saving ? "Saving…" : existing ? "Update weigh-in" : "Log weigh-in"}
           </Button>
-          <p className="text-glass-3 w-full text-xs">One weigh-in a day — logging the same day again replaces it.</p>
+          <p className="text-glass-3 w-full text-xs">
+            {existing
+              ? `You've already logged ${formatDate(existing.date)} — saving replaces it.`
+              : "One weigh-in a day. Add body fat if your scale or calipers give you one."}
+          </p>
         </form>
       </Tile>
 
@@ -812,59 +856,77 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
       ) : (
         <>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-            <StatTile label="Latest" value={kg(latest.weightKg)} tone="accent" sub={formatDate(latest.date)} />
-            <StatTile label="Last 30 days" value={change(weightChange(weights, 30))} sub="vs a month earlier" />
-            <StatTile label="Last 90 days" value={change(weightChange(weights, 90))} sub="vs three months earlier" />
+            <StatTile label="Weight" value={kg(latest.weightKg)} tone="accent" sub={formatDate(latest.date)} />
+            <StatTile label="Last 30 days" value={signedUnit(weightChange(weights, 30), kg)} sub="vs a month earlier" />
+            <StatTile label="Last 90 days" value={signedUnit(weightChange(weights, 90), kg)} sub="vs three months earlier" />
             <StatTile
               label="Since first"
-              value={change(weights.length > 1 ? Math.round((latest.weightKg - first.weightKg) * 10) / 10 : null)}
+              value={signedUnit(weights.length > 1 ? Math.round((latest.weightKg - first.weightKg) * 10) / 10 : null, kg)}
               sub={`since ${formatDate(first.date)}`}
             />
           </div>
 
           {weights.length > 1 && (
-            <Tile className="p-[22px]">
-              <SectionTitle>Weight Trend</SectionTitle>
-              <div className="h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
-                    <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
-                    <YAxis
-                      stroke={AXIS}
-                      fontSize={12}
-                      tickLine={false}
-                      width={56}
-                      domain={axis?.domain}
-                      ticks={axis?.ticks}
-                      tickFormatter={(v: number) => `${v} kg`}
-                    />
-                    <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [kg(v), n]} />
-                    <Line
-                      type="monotone"
-                      dataKey="kg"
-                      name="Weigh-in"
-                      stroke={MUTED}
-                      strokeWidth={1}
-                      dot={{ r: 2.5, fill: MUTED, strokeWidth: 0 }}
-                      isAnimationActive={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="trend"
-                      name="Trend"
-                      stroke={ACCENT}
-                      strokeWidth={2.5}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+            <TrendChart
+              title="Weight Trend"
+              data={chart}
+              valueKey="kg"
+              valueName="Weigh-in"
+              axis={axis}
+              unit={kg}
+            />
+          )}
+
+          {latestFat && (
+            <>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+                <StatTile
+                  label="Body fat"
+                  value={pct(latestFat.bodyFatPct!)}
+                  tone="accent"
+                  sub={formatDate(latestFat.date)}
+                />
+                <StatTile
+                  label="Body fat, 30 days"
+                  value={signedUnit(weightChange(weights, 30, byBodyFat), pct)}
+                  sub="vs a month earlier"
+                />
+                <StatTile
+                  label="Body fat, since first"
+                  value={signedUnit(
+                    fatPoints.length > 1 ? Math.round((latestFat.bodyFatPct! - firstFat.bodyFatPct!) * 10) / 10 : null,
+                    pct
+                  )}
+                  sub={`since ${formatDate(firstFat.date)}`}
+                />
+                <StatTile
+                  label="Lean mass"
+                  value={kg(leanMassKg(latestFat.weightKg, latestFat.bodyFatPct!))}
+                  sub={
+                    fatPoints.length > 1
+                      ? `${signedUnit(
+                          Math.round(
+                            (leanMassKg(latestFat.weightKg, latestFat.bodyFatPct!) -
+                              leanMassKg(firstFat.weightKg, firstFat.bodyFatPct!)) *
+                              10
+                          ) / 10,
+                          kg
+                        )} since ${shortDate(firstFat.date)}`
+                      : "weight that isn't fat"
+                  }
+                />
               </div>
-              <p className="text-glass-3 mt-2 text-[11px]">
-                The trend line averages your last 7 weigh-ins, smoothing out day-to-day swings.
-              </p>
-            </Tile>
+              {fatPoints.length > 1 && (
+                <TrendChart
+                  title="Body Fat Trend"
+                  data={fatChart}
+                  valueKey="pct"
+                  valueName="Body fat"
+                  axis={fatAxis}
+                  unit={pct}
+                />
+              )}
+            </>
           )}
 
           <Tile className="p-[22px]">
@@ -875,6 +937,9 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
                   <span className="num text-glass-2">{formatDate(w.date)}</span>
                   <span className="flex items-center gap-4">
                     <span className="num text-glass">{kg(w.weightKg)}</span>
+                    <span className="num text-glass-3 w-14 text-right">
+                      {w.bodyFatPct != null ? pct(w.bodyFatPct) : ""}
+                    </span>
                     <button className="text-xs text-[#ff6b8a] hover:underline" onClick={() => remove(w)}>
                       delete
                     </button>
@@ -886,6 +951,68 @@ function WeightView({ weights, onChanged }: { weights: BodyWeight[]; onChanged: 
         </>
       )}
     </>
+  );
+}
+
+/** Readings as faint dots with a smoothed trend line through them. */
+function TrendChart({
+  title,
+  data,
+  valueKey,
+  valueName,
+  axis,
+  unit,
+}: {
+  title: string;
+  data: { label: string; trend: number }[];
+  valueKey: string;
+  valueName: string;
+  axis: { domain: [number, number]; ticks: number[] } | undefined;
+  unit: (v: number) => string;
+}) {
+  return (
+    <Tile className="p-[22px]">
+      <SectionTitle>{title}</SectionTitle>
+      <div className="h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+            <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
+            <YAxis
+              stroke={AXIS}
+              fontSize={12}
+              tickLine={false}
+              width={56}
+              domain={axis?.domain}
+              ticks={axis?.ticks}
+              tickFormatter={unit}
+            />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n: string) => [unit(v), n]} />
+            <Line
+              type="monotone"
+              dataKey={valueKey}
+              name={valueName}
+              stroke={MUTED}
+              strokeWidth={1}
+              dot={{ r: 2.5, fill: MUTED, strokeWidth: 0 }}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="trend"
+              name="Trend"
+              stroke={ACCENT}
+              strokeWidth={2.5}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-glass-3 mt-2 text-[11px]">
+        The trend line averages your last 7 readings, smoothing out day-to-day swings.
+      </p>
+    </Tile>
   );
 }
 

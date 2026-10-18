@@ -36,6 +36,7 @@ model User {
   categoryRules CategoryRule[]
   settings     Settings?
   workouts     Workout[]
+  workoutPresets WorkoutPreset[]
   bodyWeights  BodyWeight[]
 }
 
@@ -365,13 +366,32 @@ model WorkoutSet {
   @@index([workoutId])
 }
 
+// A saved workout to start from — loaded whole into the form, so its sets are
+// kept as a JSON list ([{ exercise, reps, weightKg }]) rather than rows.
+model WorkoutPreset {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  kind        String
+  title       String   @default("")
+  durationSec Int?
+  distanceKm  Decimal? @db.Decimal(8, 3)
+  sets        Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, name]) // saving under an existing name updates that preset
+}
+
 model BodyWeight {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date      DateTime
-  weightKg  Decimal  @db.Decimal(6, 2)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime
+  weightKg   Decimal  @db.Decimal(6, 2)
+  bodyFatPct Decimal? @db.Decimal(4, 1) // optional, e.g. from a smart scale
+  createdAt  DateTime @default(now())
 
   @@unique([userId, date]) // one weigh-in per day; logging again replaces it
 }

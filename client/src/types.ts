@@ -247,6 +247,18 @@ export interface BodyWeight {
   id: string;
   date: string;
   weightKg: number;
+  bodyFatPct?: number | null;
+}
+
+/** A saved workout to start from; sets keep their reps and weights. */
+export interface WorkoutPreset {
+  id: string;
+  name: string;
+  kind: WorkoutKind;
+  title: string;
+  durationSec: number | null;
+  distanceKm: number | null;
+  sets: WorkoutSet[];
 }
 
 export interface Totals {

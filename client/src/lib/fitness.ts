@@ -278,26 +278,44 @@ export function cardioBests(sessions: CardioSession[], kind: WorkoutKind) {
 
 // ── Body weight ────────────────────────────────────────────────────────────
 
-/** Trailing average over the last `window` weigh-ins, to smooth day-to-day noise. */
-export function movingAverage(points: BodyWeight[], window = 7): number[] {
-  return points.map((_, i) => {
-    const slice = points.slice(Math.max(0, i - window + 1), i + 1);
-    return slice.reduce((s, p) => s + p.weightKg, 0) / slice.length;
+type Pick = (p: BodyWeight) => number | null | undefined;
+const byWeight: Pick = (p) => p.weightKg;
+export const byBodyFat: Pick = (p) => p.bodyFatPct;
+
+/** Weigh-ins that recorded the measure, with its value. */
+const measured = (points: BodyWeight[], pick: Pick) =>
+  points.flatMap((p) => {
+    const v = pick(p);
+    return v === null || v === undefined ? [] : [{ date: p.date, v }];
+  });
+
+/** Trailing average over the last `window` readings, to smooth day-to-day noise. */
+export function movingAverage(points: BodyWeight[], window = 7, pick: Pick = byWeight): number[] {
+  const vals = measured(points, pick).map((m) => m.v);
+  return vals.map((_, i) => {
+    const slice = vals.slice(Math.max(0, i - window + 1), i + 1);
+    return slice.reduce((s, v) => s + v, 0) / slice.length;
   });
 }
 
 /**
- * Change from the last weigh-in on or before `days` before the latest one.
- * Null when there's no weigh-in that far back to compare against.
+ * Change from the last reading on or before `days` before the latest one.
+ * Null when there's no reading that far back to compare against. Weight by
+ * default; pass `byBodyFat` for body fat (in percentage points).
  */
-export function weightChange(points: BodyWeight[], days: number): number | null {
-  if (points.length < 2) return null;
-  const latest = points[points.length - 1];
+export function weightChange(points: BodyWeight[], days: number, pick: Pick = byWeight): number | null {
+  const ms = measured(points, pick);
+  if (ms.length < 2) return null;
+  const latest = ms[ms.length - 1];
   const cutoff = new Date(latest.date).getTime() - days * DAY_MS;
-  let base: BodyWeight | null = null;
-  for (const p of points) if (new Date(p.date).getTime() <= cutoff) base = p;
-  return base ? Math.round((latest.weightKg - base.weightKg) * 10) / 10 : null;
+  let base: (typeof ms)[number] | null = null;
+  for (const m of ms) if (new Date(m.date).getTime() <= cutoff) base = m;
+  return base ? Math.round((latest.v - base.v) * 10) / 10 : null;
 }
+
+/** Everything that isn't fat: weight × (1 − body fat). */
+export const leanMassKg = (weightKg: number, bodyFatPct: number) =>
+  Math.round(weightKg * (1 - bodyFatPct / 100) * 10) / 10;
 
 // ── Display ────────────────────────────────────────────────────────────────
 

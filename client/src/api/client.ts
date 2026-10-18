@@ -31,6 +31,7 @@ import type {
   BodyWeight,
   Workout,
   WorkoutKind,
+  WorkoutPreset,
   WorkoutSet,
 } from "../types";
 
@@ -349,10 +350,14 @@ export const api = {
   deleteWorkout: (id: string) => request<void>(`/fitness/workouts/${id}`, { method: "DELETE" }),
   listExercises: () => request<string[]>("/fitness/exercises"),
   listBodyWeights: () => request<BodyWeight[]>("/fitness/body-weights"),
-  logBodyWeight: (data: { date: string; weightKg: number }) =>
+  logBodyWeight: (data: { date: string; weightKg: number; bodyFatPct: number | null }) =>
     request<BodyWeight>("/fitness/body-weights", { method: "POST", body: JSON.stringify(data) }),
   deleteBodyWeight: (id: string) =>
     request<void>(`/fitness/body-weights/${id}`, { method: "DELETE" }),
+  listPresets: () => request<WorkoutPreset[]>("/fitness/presets"),
+  savePreset: (data: Omit<WorkoutInput, "date" | "notes"> & { name: string }) =>
+    request<WorkoutPreset>("/fitness/presets", { method: "POST", body: JSON.stringify(data) }),
+  deletePreset: (id: string) => request<void>(`/fitness/presets/${id}`, { method: "DELETE" }),
   updateWeeklyGoal: (weeklyWorkoutGoal: number) =>
     request<Settings>("/settings", { method: "PUT", body: JSON.stringify({ weeklyWorkoutGoal }) }),
 

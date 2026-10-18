@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import type { FormEvent } from "react";
-import { Plus, X } from "lucide-react";
+import type { FormEvent, KeyboardEvent } from "react";
+import { BookmarkPlus, Plus, X } from "lucide-react";
 import { api } from "../api/client";
-import type { Workout, WorkoutKind } from "../types";
+import type { Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
+import { toast } from "../lib/toast";
 import { Button, Field, Modal } from "./ui";
 import { KINDS, durationInput, isCardio, kindInfo, paceLabel, parseDuration } from "../lib/fitness";
 import { KIND_ICONS } from "../lib/fitnessIcons";
@@ -13,8 +14,8 @@ type ExerciseBlock = { id: number; name: string; sets: SetRow[] };
 let nextId = 1;
 const emptyBlock = (): ExerciseBlock => ({ id: nextId++, name: "", sets: [{ reps: "", weight: "" }] });
 
-/** Stored sets back into one block per exercise, keeping their order. */
-function toBlocks(w: Workout | null): ExerciseBlock[] {
+/** Stored sets (a workout's or a preset's) back into one block per exercise, in order. */
+function toBlocks(w: { kind: WorkoutKind; sets: WorkoutSet[] } | null): ExerciseBlock[] {
   if (!w || w.kind !== "strength" || w.sets.length === 0) return [emptyBlock()];
   const blocks: ExerciseBlock[] = [];
   for (const s of w.sets) {
@@ -30,11 +31,15 @@ function toBlocks(w: Workout | null): ExerciseBlock[] {
 export function LogWorkoutModal({
   workout,
   exerciseNames,
+  presets,
+  onPresetsChanged,
   onClose,
   onSaved,
 }: {
   workout: Workout | null;
   exerciseNames: string[];
+  presets: WorkoutPreset[];
+  onPresetsChanged: () => void;
   onClose: () => void;
   onSaved: (saved: Workout) => void;
 }) {
@@ -48,6 +53,12 @@ export function LogWorkoutModal({
   const [blocks, setBlocks] = useState<ExerciseBlock[]>(() => toBlocks(workout));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Presets: which one the form was filled from, and the save-as-preset panel.
+  const [applied, setApplied] = useState<string | null>(null);
+  const [managing, setManaging] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [presetSaving, setPresetSaving] = useState(false);
 
   const info = kindInfo(kind);
   const seconds = parseDuration(time);
@@ -63,13 +74,16 @@ export function LogWorkoutModal({
     [exerciseNames, blocks]
   );
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  /**
+   * The form as a workout (everything but date and notes), or null with an
+   * error shown. Shared by logging and saving as a preset, so both check alike.
+   */
+  const collect = () => {
     setError("");
-    if (!date) return setError("Pick a date.");
-    if (date > today) return setError("A workout can't be dated in the future.");
-    if (seconds !== null && Number.isNaN(seconds))
-      return setError("Enter the time as minutes (45) or m:ss (25:30).");
+    if (seconds !== null && Number.isNaN(seconds)) {
+      setError("Enter the time as minutes (45) or m:ss (25:30).");
+      return null;
+    }
 
     // A name matching an earlier exercise (in any case) takes its existing
     // spelling, so "bench press" doesn't rename "Bench press" everywhere.
@@ -81,33 +95,51 @@ export function LogWorkoutModal({
       for (const b of blocks) {
         const filled = b.sets.filter((s) => s.reps.trim() !== "" || s.weight.trim() !== "");
         if (!b.name.trim() && filled.length === 0) continue; // an untouched block
-        if (!b.name.trim()) return setError("Give every exercise a name.");
+        if (!b.name.trim()) {
+          setError("Give every exercise a name.");
+          return null;
+        }
         for (const s of filled) {
           const reps = Number(s.reps);
           const weightKg = s.weight.trim() === "" ? 0 : Number(s.weight);
-          if (!Number.isInteger(reps) || reps < 1)
-            return setError(`Enter the reps for each set of ${b.name.trim()}.`);
-          if (!Number.isFinite(weightKg) || weightKg < 0)
-            return setError(`Check the weights for ${b.name.trim()}.`);
+          if (!Number.isInteger(reps) || reps < 1) {
+            setError(`Enter the reps for each set of ${b.name.trim()}.`);
+            return null;
+          }
+          if (!Number.isFinite(weightKg) || weightKg < 0) {
+            setError(`Check the weights for ${b.name.trim()}.`);
+            return null;
+          }
           sets.push({ exercise: canonical(b.name), reps, weightKg });
         }
       }
-      if (sets.length === 0) return setError("Add at least one exercise with a set.");
+      if (sets.length === 0) {
+        setError("Add at least one exercise with a set.");
+        return null;
+      }
     } else {
       sets = [];
     }
-    if (isCardio(kind) && km !== null && (!Number.isFinite(km) || km <= 0))
-      return setError("Enter the distance in km.");
-
-    const payload = {
-      date: new Date(date).toISOString(),
+    if (isCardio(kind) && km !== null && (!Number.isFinite(km) || km <= 0)) {
+      setError("Enter the distance in km.");
+      return null;
+    }
+    return {
       kind,
       title: title.trim(),
       durationSec: seconds,
       distanceKm: isCardio(kind) ? km : null,
-      notes: notes.trim() || null,
       sets,
     };
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!date) return setError("Pick a date.");
+    if (date > today) return setError("A workout can't be dated in the future.");
+    const data = collect();
+    if (!data) return;
+    const payload = { ...data, date: new Date(date).toISOString(), notes: notes.trim() || null };
     setSaving(true);
     try {
       const saved = workout
@@ -120,9 +152,118 @@ export function LogWorkoutModal({
     }
   };
 
+  /** Fill the form from a preset — the date and notes stay as they are. */
+  const applyPreset = (p: WorkoutPreset) => {
+    setKind(p.kind);
+    setTitle(p.title);
+    setTime(durationInput(p.durationSec));
+    setDistance(p.distanceKm ? String(p.distanceKm) : "");
+    setBlocks(toBlocks(p));
+    setApplied(p.id);
+    setError("");
+  };
+
+  const removePreset = async (p: WorkoutPreset) => {
+    if (!confirm(`Delete the “${p.name}” preset? Workouts you've logged from it are kept.`)) return;
+    try {
+      await api.deletePreset(p.id);
+      if (applied === p.id) setApplied(null);
+      onPresetsChanged();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  // Saving under an existing name (in any case) updates that preset.
+  const matching = presets.find((p) => p.name.toLowerCase() === presetName.trim().toLowerCase());
+  // Suggest updating the preset the form came from only while it's still that
+  // workout (same type and name) — otherwise suggest a new one, so switching a
+  // loaded "Push day" to a run doesn't offer to overwrite "Push day".
+  const openPresetPanel = () => {
+    const from = presets.find((p) => p.id === applied);
+    const stillThatPreset = from && from.kind === kind && from.title === title.trim();
+    setPresetName(stillThatPreset ? from.name : title.trim() || info.label);
+    setPresetOpen(true);
+  };
+  const savePreset = async () => {
+    const data = collect();
+    if (!data) return;
+    const name = matching?.name ?? presetName.trim();
+    if (!name) return setError("Give the preset a name.");
+    setPresetSaving(true);
+    try {
+      const saved = await api.savePreset({ ...data, name });
+      toast.success(matching ? `Preset “${name}” updated.` : `Saved “${name}” as a preset.`);
+      setApplied(saved.id);
+      setPresetOpen(false);
+      onPresetsChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPresetSaving(false);
+    }
+  };
+  // Enter in the name box saves the preset — it must not log the workout.
+  const presetKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      savePreset();
+    }
+  };
+
   return (
-    <Modal title={workout ? "Edit Workout" : "Log Workout"} onClose={onClose}>
+    <Modal title={workout ? "Edit Workout" : "Log Workout"} onClose={onClose} opaque>
       <form onSubmit={submit} className="space-y-4">
+        {!workout && presets.length > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-glass-3 text-xs uppercase tracking-wider">Start from a preset</span>
+              <button
+                type="button"
+                onClick={() => setManaging((m) => !m)}
+                className="text-glass-3 hover:text-glass text-[11px]"
+              >
+                {managing ? "Done" : "Manage"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {presets.map((p) => {
+                const Icon = KIND_ICONS[p.kind];
+                const on = applied === p.id;
+                return (
+                  <span
+                    key={p.id}
+                    className={`inline-flex items-center rounded-lg border text-xs font-medium transition-colors ${
+                      on
+                        ? "border-[rgba(10,132,255,0.6)] bg-[rgba(10,132,255,0.18)] text-white"
+                        : "border-white/10 bg-white/5 text-glass-2"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      disabled={managing}
+                      className="hover:text-glass inline-flex items-center gap-1.5 px-2.5 py-1.5 disabled:cursor-default"
+                    >
+                      <Icon size={13} strokeWidth={1.75} /> {p.name}
+                    </button>
+                    {managing && (
+                      <button
+                        type="button"
+                        onClick={() => removePreset(p)}
+                        className="text-glass-3 hover:text-[#ff6b8a] pr-2"
+                        aria-label={`Delete preset ${p.name}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Kind of workout">
           {KINDS.map((k) => {
             const Icon = KIND_ICONS[k.id];
@@ -292,14 +433,48 @@ export function LogWorkoutModal({
           <input className="w-full" placeholder="How did it feel?" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
 
+        {presetOpen && (
+          <div className="glass-nested flex flex-wrap items-end gap-2 rounded-xl p-3">
+            <Field label="Preset name">
+              <input
+                autoFocus
+                className="w-48"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                onKeyDown={presetKey}
+              />
+            </Field>
+            <Button type="button" variant="primary" disabled={presetSaving} onClick={savePreset}>
+              {presetSaving ? "Saving…" : matching ? "Update preset" : "Save preset"}
+            </Button>
+            <Button type="button" onClick={() => setPresetOpen(false)}>
+              Cancel
+            </Button>
+            <p className="text-glass-3 w-full text-xs">
+              {matching
+                ? `Replaces your “${matching.name}” preset with what's in the form now.`
+                : "Saves the type, name, time and distance, and every exercise with its sets — ready to start from next time."}
+            </p>
+          </div>
+        )}
+
         {error && <div className="text-sm text-[#ff6b8a]">{error}</div>}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={saving}>
-            {saving ? "Saving…" : workout ? "Save" : "Log Workout"}
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+          {!presetOpen ? (
+            <Button type="button" variant="ghost" className="inline-flex items-center gap-1.5 px-0" onClick={openPresetPanel}>
+              <BookmarkPlus size={14} strokeWidth={2} /> Save as preset
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
+              {saving ? "Saving…" : workout ? "Save" : "Log Workout"}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>

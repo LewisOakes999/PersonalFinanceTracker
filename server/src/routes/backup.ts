@@ -29,6 +29,7 @@ backupRouter.get(
       workouts,
       workoutSets,
       bodyWeights,
+      workoutPresets,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
       prisma.category.findMany({ where: { userId } }),
@@ -48,6 +49,7 @@ backupRouter.get(
       prisma.workout.findMany({ where: { userId } }),
       prisma.workoutSet.findMany({ where: { workout: { userId } } }),
       prisma.bodyWeight.findMany({ where: { userId } }),
+      prisma.workoutPreset.findMany({ where: { userId } }),
     ]);
 
     res.json({
@@ -71,6 +73,7 @@ backupRouter.get(
       workouts,
       workoutSets,
       bodyWeights,
+      workoutPresets,
     });
   })
 );
@@ -154,6 +157,10 @@ backupRouter.post(
       await prisma.workoutSet.createMany({
         data: plain(data.workoutSets).filter((s) => ids.has(s?.workoutId)),
       });
+    }
+    if (Array.isArray(data.workoutPresets)) {
+      await prisma.workoutPreset.deleteMany({ where: { userId } });
+      await prisma.workoutPreset.createMany({ data: withUser(data.workoutPresets) });
     }
     if (Array.isArray(data.bodyWeights)) {
       await prisma.bodyWeight.deleteMany({ where: { userId } });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { BodyWeight, Workout, WorkoutKind, WorkoutSet } from "../../types";
 import {
+  byBodyFat,
   cardioBests,
   cardioSessions,
   durationInput,
@@ -8,6 +9,7 @@ import {
   exerciseProgress,
   formatClock,
   formatMinutes,
+  leanMassKg,
   movingAverage,
   paceLabel,
   parseDuration,
@@ -219,6 +221,29 @@ describe("body weight", () => {
   });
   it("smooths with a trailing average", () => {
     expect(movingAverage(points, 2)).toEqual([85, 84.2, 83, 82.3]);
+  });
+
+  // Body fat is optional, so only some weigh-ins have it.
+  const withFat: BodyWeight[] = [
+    { ...w("2026-08-01", 85), bodyFatPct: 21.0 },
+    w("2026-08-20", 84.1),
+    { ...w("2026-09-01", 83.4), bodyFatPct: 20.2 },
+    { ...w("2026-10-01", 82.0), bodyFatPct: 19.1 },
+    w("2026-10-05", 81.8),
+  ];
+  it("tracks body fat across only the weigh-ins that measured it", () => {
+    expect(weightChange(withFat, 30, byBodyFat)).toBe(-1.1); // 19.1 vs 20.2
+    expect(weightChange(withFat, 60, byBodyFat)).toBe(-1.9); // vs 21.0
+    expect(movingAverage(withFat, 2, byBodyFat)).toEqual([21, 20.6, 19.65]);
+  });
+  it("still compares weight across every weigh-in", () => {
+    expect(weightChange(withFat, 30)).toBe(-1.6); // 81.8 vs 83.4
+  });
+  it("has no body-fat change with fewer than two readings", () => {
+    expect(weightChange([w("2026-10-01", 80), { ...w("2026-10-02", 80), bodyFatPct: 18 }], 1, byBodyFat)).toBeNull();
+  });
+  it("works out lean mass", () => {
+    expect(leanMassKg(82, 19.1)).toBe(66.3);
   });
 });
 

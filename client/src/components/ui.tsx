@@ -204,11 +204,14 @@ export function Modal({
   title,
   onClose,
   onBack,
+  opaque = false,
   children,
 }: {
   title: string;
   onClose: () => void;
   onBack?: () => void;
+  /** A solid panel rather than see-through glass — for long, dense forms. */
+  opaque?: boolean;
   children: ReactNode;
 }) {
   return createPortal(
@@ -217,7 +220,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="glass w-full max-w-lg rounded-panel"
+        className={`glass w-full max-w-lg rounded-panel ${opaque ? "glass-solid" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
