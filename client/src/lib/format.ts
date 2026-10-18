@@ -106,3 +106,13 @@ export function nextInterestDate(a: {
   if (a.maturityDate && d > new Date(a.maturityDate)) return a.maturityDate;
   return d.toISOString().slice(0, 10);
 }
+
+/** "+£1,234.00" / "−£56.78" — an explicit sign for gains, losses and differences. */
+export function formatSigned(value: number, fmt: (n: number) => string): string {
+  return `${value >= 0 ? "+" : "−"}${fmt(Math.abs(value))}`;
+}
+
+/** "+4.0%" / "−2.5%". */
+export function formatSignedPct(pct: number, digits = 1): string {
+  return formatSigned(pct, (n) => `${n.toFixed(digits)}%`);
+}

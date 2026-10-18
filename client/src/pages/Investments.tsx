@@ -29,7 +29,7 @@ import {
   StatTile,
   Tile,
 } from "../components/ui";
-import { formatCurrency, formatDate } from "../lib/format";
+import { formatCurrency, formatDate, formatSigned } from "../lib/format";
 import { fittedAxis } from "../lib/chart";
 import { useCurrency } from "../lib/CurrencyContext";
 import { toast } from "../lib/toast";
@@ -43,7 +43,7 @@ const BAND = "#0a84ff";
 const PUT_IN = "rgba(245,245,247,0.55)";
 const AXIS = "rgba(245,245,247,0.45)";
 
-const signed = (v: number, fmt: (n: number) => string) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
+const signed = formatSigned;
 
 const POSITION_TEXT = {
   above: "above the forecast range",
@@ -128,7 +128,7 @@ export default function Investments({ onManageAccounts }: { onManageAccounts?: (
           />
           <StatTile label="Put in" value={format(t.contributed)} sub="money in, less money out" />
           <StatTile
-            label="Gain / loss"
+            label="Unrealised gain / loss"
             value={t.valuedCount > 0 ? signed(t.gain, format) : "—"}
             tone={t.valuedCount === 0 ? "default" : t.gain >= 0 ? "income" : "expense"}
             sub={
@@ -239,7 +239,7 @@ function AccountPerformance({
         />
         <Metric label="Put in" value={fmt(a.contributed)} />
         <Metric
-          label="Gain / loss"
+          label="Unrealised gain / loss"
           value={a.gain === null ? "—" : signed(a.gain, fmt)}
           color={gainColor}
           sub={

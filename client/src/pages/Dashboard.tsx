@@ -30,6 +30,7 @@ import { api } from "../api/client";
 import type {
   Balances,
   CategoryTotal,
+  InvestmentPerformance,
   SpendingInsights,
   Totals,
   Transaction,
@@ -47,7 +48,14 @@ import {
 } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { defaultPeriod, periodParams, type Period } from "../lib/period";
-import { currentMonth, formatCurrency, formatDate, nextInterestDate } from "../lib/format";
+import {
+  currentMonth,
+  formatCurrency,
+  formatDate,
+  formatSigned,
+  formatSignedPct,
+  nextInterestDate,
+} from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
 import { useAuth } from "../lib/AuthContext";
 import { isInactive } from "../lib/accounts";
@@ -129,6 +137,12 @@ export default function Dashboard({
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [insights, setInsights] = useState<SpendingInsights | null>(null);
   const [upcoming, setUpcoming] = useState<Upcoming | null>(null);
+  const [invest, setInvest] = useState<InvestmentPerformance | null>(null);
+  // Decided from balances (which Net Worth waits on too), so the tile layout
+  // settles once rather than jumping when the performance figures arrive.
+  const hasInvestments = !!balances?.accounts.some(
+    (a) => !isInactive(a) && (a.isInvestment || a.isPension)
+  );
   // Setup-guide progress. null = still checking.
   const [hasHistory, setHasHistory] = useState<boolean | null>(null);
   const [hasBudgetOrGoal, setHasBudgetOrGoal] = useState<boolean | null>(null);
@@ -153,6 +167,7 @@ export default function Dashboard({
     api.balances().then(setBalances);
     api.insights().then(setInsights);
     api.upcoming(45).then(setUpcoming);
+    api.investmentPerformance().then(setInvest).catch(() => setInvest(null));
     api.trend(12).then((t) => setHasHistory(t.some((m) => m.income > 0 || m.expenses > 0)));
     // For the setup guide's third step: any budget this month, or any goal.
     Promise.all([
@@ -269,17 +284,36 @@ export default function Dashboard({
         </Tile>
       )}
 
-      {/* Summary tiles */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-4">
-        <StatTile label="Income" value={format(totals?.income ?? 0)} tone="income" sub={periodSub} />
-        <StatTile label="Expenses" value={format(totals?.expenses ?? 0)} tone="expense" sub={periodSub} />
+      {/* Summary tiles. With investments there are five, so on wide screens the
+          period's flows take one row and where you stand (net worth, gains) the next. */}
+      <div
+        className={`grid grid-cols-[repeat(auto-fit,minmax(196px,1fr))] gap-4 ${
+          hasInvestments ? "lg:grid-cols-6" : ""
+        }`}
+      >
         <StatTile
+          label="Income"
+          value={format(totals?.income ?? 0)}
+          tone="income"
+          sub={periodSub}
+          className={hasInvestments ? "lg:col-span-2" : ""}
+        />
+        <StatTile
+          label="Expenses"
+          value={format(totals?.expenses ?? 0)}
+          tone="expense"
+          sub={periodSub}
+          className={hasInvestments ? "lg:col-span-2" : ""}
+        />
+        <StatTile
+          className={hasInvestments ? "lg:col-span-2" : ""}
           label="Net"
           value={`${net >= 0 ? "+" : "−"}${format(Math.abs(net))}`}
           tone={net >= 0 ? "income" : "expense"}
           sub="income − expenses"
         />
         <StatTile
+          className={hasInvestments ? "lg:col-span-3" : ""}
           label="Net Worth"
           value={format(balances?.netWorth ?? balances?.overall ?? 0)}
           tone="accent"
@@ -289,6 +323,32 @@ export default function Dashboard({
               : activeAccountsLabel(balances?.accounts ?? [])
           }
         />
+        {hasInvestments && (
+          <StatTile
+            className="lg:col-span-3"
+            label="Unrealised Gain"
+            value={invest && invest.totals.valuedCount > 0 ? formatSigned(invest.totals.gain, format) : "—"}
+            tone={
+              !invest || invest.totals.valuedCount === 0
+                ? "default"
+                : invest.totals.gain >= 0
+                  ? "income"
+                  : "expense"
+            }
+            sub={
+              !invest
+                ? undefined
+                : invest.totals.valuedCount === 0
+                  ? "record a value on Investments"
+                  : `${formatSignedPct(
+                      invest.totals.contributedValued > 0
+                        ? (invest.totals.gain / invest.totals.contributedValued) * 100
+                        : 0
+                    )} on ${format(invest.totals.contributedValued)} put in`
+            }
+            onClick={onGoTo ? () => onGoTo("investments") : undefined}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -536,6 +596,7 @@ export default function Dashboard({
                   balances && a.currency !== balances.baseCurrency
                     ? `≈ ${format(a.baseBalance)}`
                     : null,
+                  unrealisedLabel(invest, a.id),
                 ]
                   .filter(Boolean)
                   .join(" · ")}
@@ -772,6 +833,14 @@ function NetWorthRow({
       </button>
     </div>
   );
+}
+
+/** "+£400.00 unrealised (+3.2%)" for an investment account with a recorded value. */
+function unrealisedLabel(invest: InvestmentPerformance | null, accountId: string): string | null {
+  const p = invest?.accounts.find((x) => x.id === accountId);
+  if (!p || p.gain === null) return null;
+  const amount = formatSigned(p.gain, (n) => formatCurrency(n, p.currency));
+  return `${amount} unrealised${p.gainPct !== null ? ` (${formatSignedPct(p.gainPct)})` : ""}`;
 }
 
 /** "4 accounts" — counting only active ones, since inactive accounts are hidden. */

@@ -86,14 +86,23 @@ export function StatTile({
   value,
   tone = "default",
   sub,
+  onClick,
+  className = "",
 }: {
   label: string;
   value: string;
   tone?: "default" | "income" | "expense" | "accent";
   sub?: string;
+  /** Makes the whole tile a link to where the figure comes from. */
+  onClick?: () => void;
+  className?: string;
 }) {
   return (
-    <Tile rounded="rounded-glass" className="p-5">
+    <Tile
+      rounded="rounded-glass"
+      className={`p-5 ${onClick ? "transition-colors hover:bg-white/[0.04]" : ""} ${className}`}
+      onClick={onClick}
+    >
       <div className="text-glass-3 text-[11px] font-medium uppercase tracking-[0.08em]">
         {label}
       </div>

@@ -15,6 +15,7 @@ import {
 import { api } from "../api/client";
 import type {
   CategoryTotal,
+  InvestmentPerformance,
   NetWorthPoint,
   Subscriptions,
   Transaction,
@@ -23,7 +24,13 @@ import type {
 import { SectionTitle, Tile } from "../components/ui";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { buildPeriod, defaultPeriod, periodParams, type Period } from "../lib/period";
-import { formatDate, shortMonthLabel } from "../lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  formatSigned,
+  formatSignedPct,
+  shortMonthLabel,
+} from "../lib/format";
 import { fittedDomain } from "../lib/chart";
 import { useCurrency } from "../lib/CurrencyContext";
 import { tooltipStyle } from "./Dashboard";
@@ -38,7 +45,7 @@ type CatType = "expense" | "income";
 const NETWORTH = "#64d2ff";
 const AXIS = "rgba(245,245,247,0.45)";
 
-export default function Analytics() {
+export default function Analytics({ onGoTo }: { onGoTo?: (tab: string) => void } = {}) {
   const { format } = useCurrency();
   const [period, setPeriod] = useState<Period>(() => defaultPeriod("month"));
   const [catType, setCatType] = useState<CatType>("expense");
@@ -48,6 +55,7 @@ export default function Analytics() {
   const [selectedCat, setSelectedCat] = useState<CategoryTotal | null>(null);
   const [drill, setDrill] = useState<Transaction[]>([]);
   const [subs, setSubs] = useState<Subscriptions | null>(null);
+  const [invest, setInvest] = useState<InvestmentPerformance | null>(null);
 
   const isIncome = catType === "income";
 
@@ -71,6 +79,7 @@ export default function Analytics() {
     api.trend(12).then(setTrend);
     api.netWorth(12).then(setNetWorth);
     api.subscriptions().then(setSubs);
+    api.investmentPerformance().then(setInvest).catch(() => setInvest(null));
   }, []);
 
   useEffect(() => {
@@ -220,6 +229,11 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </Tile>
+
+      {/* Unrealised gains on investments — point-in-time, so the period doesn't apply */}
+      {invest && invest.accounts.length > 0 && (
+        <UnrealisedGains data={invest} onOpen={onGoTo ? () => onGoTo("investments") : undefined} />
+      )}
 
       {/* Income vs expenses over time — click a month to focus the page on it */}
       <Tile className="p-[22px]">
@@ -410,6 +424,90 @@ export default function Analytics() {
           )}
         </Tile>
       </div>
+    </div>
+  );
+}
+
+/** Each investment account's gain on what was put in, as of its latest recorded value. */
+function UnrealisedGains({ data, onOpen }: { data: InvestmentPerformance; onOpen?: () => void }) {
+  const { format } = useCurrency();
+  const t = data.totals;
+  // Bars are scaled to the biggest % move, so accounts compare at a glance.
+  const maxPct = Math.max(0, ...data.accounts.map((a) => Math.abs(a.gainPct ?? 0)));
+  const totalPct = t.contributedValued > 0 ? (t.gain / t.contributedValued) * 100 : 0;
+
+  return (
+    <Tile className="p-[22px]">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+          Unrealised Gains
+        </h2>
+        {onOpen && (
+          <button onClick={onOpen} className="text-[12px] text-[#64d2ff] hover:underline">
+            Record values on Investments
+          </button>
+        )}
+      </div>
+      {t.valuedCount === 0 ? (
+        <p className="text-glass-3 -mt-2 mb-3 text-[13px]">
+          No values recorded yet — record what your investments are worth on the Investments tab to
+          see how they've done.
+        </p>
+      ) : (
+        <p className="text-glass-3 -mt-2 mb-3 text-[13px]">
+          <span className="num font-semibold" style={{ color: t.gain >= 0 ? INCOME : EXPENSE }}>
+            {formatSigned(t.gain, format)} ({formatSignedPct(totalPct)})
+          </span>{" "}
+          on <span className="num text-glass-2">{format(t.contributedValued)}</span> put in · as of
+          each account's latest value
+        </p>
+      )}
+      <ul className="divide-y divide-white/10">
+        {data.accounts.map((a) => {
+          const fmt = (n: number) => formatCurrency(n, a.currency);
+          const color = a.gain === null ? undefined : a.gain >= 0 ? INCOME : EXPENSE;
+          return (
+            <li
+              key={a.id}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-2.5 text-sm sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto]"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-glass">{a.name}</div>
+                <div className="num text-glass-3 text-xs">
+                  {a.valuedAt
+                    ? `put in ${fmt(a.contributedAtValuation!)} · worth ${fmt(a.valuedValue!)} · ${formatDate(a.valuedAt)}`
+                    : `put in ${fmt(a.contributed)} · not valued yet`}
+                </div>
+              </div>
+              <GainBar pct={a.gainPct} max={maxPct} />
+              <div className="num text-right" style={{ color }}>
+                <div>{a.gain === null ? "—" : formatSigned(a.gain, fmt)}</div>
+                {a.gainPct !== null && <div className="text-xs">{formatSignedPct(a.gainPct)}</div>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Tile>
+  );
+}
+
+/** A bar growing right (gain) or left (loss) from a centre line. */
+function GainBar({ pct, max }: { pct: number | null; max: number }) {
+  const half = pct === null || max === 0 ? 0 : Math.min(50, (Math.abs(pct) / max) * 50);
+  return (
+    <div className="relative hidden h-2 rounded-full bg-white/[0.06] sm:block" aria-hidden>
+      <div className="absolute inset-y-[-3px] left-1/2 w-px bg-white/25" />
+      {pct !== null && half > 0 && (
+        <div
+          className="absolute inset-y-0 rounded-full"
+          style={{
+            left: pct >= 0 ? "50%" : `${50 - half}%`,
+            width: `${half}%`,
+            background: pct >= 0 ? INCOME : EXPENSE,
+          }}
+        />
+      )}
     </div>
   );
 }

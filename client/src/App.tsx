@@ -237,7 +237,7 @@ export default function App() {
             />
           )}
           {tab === "transactions" && <Transactions initialAccountId={txnAccountId ?? undefined} />}
-          {tab === "analytics" && <Analytics />}
+          {tab === "analytics" && <Analytics onGoTo={(t) => go(t as Tab)} />}
           {tab === "budgets" && <Budgets />}
           {tab === "goals" && <Goals />}
           {tab === "investments" && <Investments onManageAccounts={() => manage("accounts")} />}
