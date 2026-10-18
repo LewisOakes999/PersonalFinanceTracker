@@ -1,11 +1,19 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { BookmarkPlus, Plus, X } from "lucide-react";
 import { api } from "../api/client";
 import type { Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
 import { toast } from "../lib/toast";
 import { Button, Field, Modal } from "./ui";
-import { KINDS, durationInput, isCardio, kindInfo, paceLabel, parseDuration } from "../lib/fitness";
+import {
+  KINDS,
+  isCardio,
+  joinDuration,
+  kindInfo,
+  paceLabel,
+  splitDuration,
+  type DurationParts,
+} from "../lib/fitness";
 import { KIND_ICONS } from "../lib/fitnessIcons";
 
 type SetRow = { reps: string; weight: string };
@@ -46,7 +54,9 @@ export function LogWorkoutModal({
   const today = new Date().toISOString().slice(0, 10);
   const [kind, setKind] = useState<WorkoutKind>(workout?.kind ?? "strength");
   const [date, setDate] = useState(workout ? workout.date.slice(0, 10) : today);
-  const [time, setTime] = useState(durationInput(workout?.durationSec ?? null));
+  const [dur, setDur] = useState<DurationParts>(() =>
+    splitDuration(workout?.durationSec ?? null, isCardio(workout?.kind ?? "strength"))
+  );
   const [title, setTitle] = useState(workout?.title ?? "");
   const [distance, setDistance] = useState(workout?.distanceKm ? String(workout.distanceKm) : "");
   const [notes, setNotes] = useState(workout?.notes ?? "");
@@ -61,7 +71,10 @@ export function LogWorkoutModal({
   const [presetSaving, setPresetSaving] = useState(false);
 
   const info = kindInfo(kind);
-  const seconds = parseDuration(time);
+  const cardio = isCardio(kind);
+  // Only runs, rides, swims and walks have a seconds box — their pace needs it.
+  const seconds = joinDuration({ ...dur, s: cardio ? dur.s : "" });
+  const durationLabelId = useId();
   const km = distance.trim() === "" ? null : Number(distance);
   const pace = isCardio(kind) ? paceLabel(kind, km, seconds !== null && !Number.isNaN(seconds) ? seconds : null) : null;
 
@@ -81,7 +94,11 @@ export function LogWorkoutModal({
   const collect = () => {
     setError("");
     if (seconds !== null && Number.isNaN(seconds)) {
-      setError("Enter the time as minutes (45) or m:ss (25:30).");
+      setError("Enter the duration as whole hours and minutes" + (cardio ? " (and seconds)." : "."));
+      return null;
+    }
+    if (seconds !== null && seconds > 24 * 60 * 60) {
+      setError("That's longer than a day — check the duration.");
       return null;
     }
 
@@ -156,7 +173,7 @@ export function LogWorkoutModal({
   const applyPreset = (p: WorkoutPreset) => {
     setKind(p.kind);
     setTitle(p.title);
-    setTime(durationInput(p.durationSec));
+    setDur(splitDuration(p.durationSec, isCardio(p.kind)));
     setDistance(p.distanceKm ? String(p.distanceKm) : "");
     setBlocks(toBlocks(p));
     setApplied(p.id);
@@ -288,19 +305,40 @@ export function LogWorkoutModal({
           })}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Date">
             <input type="date" className="w-full" max={today} value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          {/* Either format works in both: minutes ("45") or a clock time ("25:30"). */}
-          <Field label={info.group === "cardio" ? "Time (optional)" : "Minutes (optional)"}>
-            <input
-              className="num w-full"
-              placeholder={info.group === "cardio" ? "e.g. 25:30" : "e.g. 45"}
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-            />
-          </Field>
+          <div role="group" aria-labelledby={durationLabelId}>
+            <span id={durationLabelId} className="text-glass-3 mb-1 block text-xs uppercase tracking-wider">
+              Duration (optional)
+            </span>
+            <div className="flex items-center gap-2">
+              <DurationBox
+                label="Hours"
+                unit="h"
+                placeholder="0"
+                value={dur.h}
+                onChange={(h) => setDur((d) => ({ ...d, h }))}
+              />
+              <DurationBox
+                label="Minutes"
+                unit="m"
+                placeholder={cardio ? "25" : "45"}
+                value={dur.m}
+                onChange={(m) => setDur((d) => ({ ...d, m }))}
+              />
+              {cardio && (
+                <DurationBox
+                  label="Seconds"
+                  unit="s"
+                  placeholder="00"
+                  value={dur.s}
+                  onChange={(v) => setDur((d) => ({ ...d, s: v }))}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         <Field label="Name (optional)">
@@ -326,7 +364,7 @@ export function LogWorkoutModal({
                   Pace <span className="num text-glass">{pace}</span>
                 </>
               ) : (
-                "Add distance and time to see your pace."
+                "Add distance and duration to see your pace."
               )}
             </div>
           </div>
@@ -453,7 +491,7 @@ export function LogWorkoutModal({
             <p className="text-glass-3 w-full text-xs">
               {matching
                 ? `Replaces your “${matching.name}” preset with what's in the form now.`
-                : "Saves the type, name, time and distance, and every exercise with its sets — ready to start from next time."}
+                : "Saves the type, name, duration and distance, and every exercise with its sets — ready to start from next time."}
             </p>
           </div>
         )}
@@ -478,5 +516,37 @@ export function LogWorkoutModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** One small number box of the duration, with its unit beside it. */
+function DurationBox({
+  label,
+  unit,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  unit: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      <input
+        type="number"
+        inputMode="numeric"
+        min="0"
+        step="1"
+        aria-label={label}
+        className="num w-full min-w-0 px-2 text-center"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span className="text-glass-3 text-xs">{unit}</span>
+    </span>
   );
 }

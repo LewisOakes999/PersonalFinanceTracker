@@ -4,15 +4,15 @@ import {
   byBodyFat,
   cardioBests,
   cardioSessions,
-  durationInput,
   e1rm,
   exerciseProgress,
   formatClock,
   formatMinutes,
   leanMassKg,
   movingAverage,
+  joinDuration,
   paceLabel,
-  parseDuration,
+  splitDuration,
   streak,
   weekStart,
   weeklySummary,
@@ -36,21 +36,44 @@ const workout = (date: string, kind: WorkoutKind, extra: Partial<Workout> = {}):
 const sets = (exercise: string, ...pairs: [number, number][]): WorkoutSet[] =>
   pairs.map(([reps, weightKg]) => ({ exercise, reps, weightKg }));
 
-describe("parseDuration", () => {
-  it("reads plain numbers as minutes", () => {
-    expect(parseDuration("45")).toBe(2700);
-    expect(parseDuration("45.5")).toBe(2730);
+describe("joinDuration", () => {
+  const d = (h: string, m: string, s = "") => joinDuration({ h, m, s });
+  it("adds up hours, minutes and seconds", () => {
+    expect(d("1", "5", "30")).toBe(3930);
+    expect(d("", "25", "30")).toBe(1530);
+    expect(d("1", "")).toBe(3600);
   });
-  it("reads m:ss and h:mm:ss", () => {
-    expect(parseDuration("25:30")).toBe(1530);
-    expect(parseDuration("1:05:30")).toBe(3930);
+  it("lets minutes and seconds run past 59", () => {
+    expect(d("", "90")).toBe(5400);
+    expect(d("", "", "90")).toBe(90);
   });
-  it("is null when blank and NaN when unreadable", () => {
-    expect(parseDuration("  ")).toBeNull();
-    expect(parseDuration("25:75")).toBeNaN();
-    expect(parseDuration("abc")).toBeNaN();
-    expect(parseDuration("0")).toBeNaN();
-    expect(parseDuration("1:2:3:4")).toBeNaN();
+  it("is null when nothing (or only zeros) was entered", () => {
+    expect(d("", "")).toBeNull();
+    expect(d(" ", "", "")).toBeNull();
+    expect(d("0", "0", "0")).toBeNull();
+  });
+  it("is NaN for anything but whole, non-negative numbers", () => {
+    expect(d("1.5", "")).toBeNaN();
+    expect(d("", "-5")).toBeNaN();
+    expect(d("", "abc")).toBeNaN();
+  });
+});
+
+describe("splitDuration", () => {
+  it("fills hours, minutes and seconds for cardio", () => {
+    expect(splitDuration(3930, true)).toEqual({ h: "1", m: "5", s: "30" });
+    expect(splitDuration(1530, true)).toEqual({ h: "", m: "25", s: "30" });
+  });
+  it("rounds to the minute without a seconds box", () => {
+    expect(splitDuration(2730, false)).toEqual({ h: "", m: "46", s: "" });
+    expect(splitDuration(3570, false)).toEqual({ h: "1", m: "0", s: "" });
+  });
+  it("is blank with no duration", () => {
+    expect(splitDuration(null, true)).toEqual({ h: "", m: "", s: "" });
+  });
+  it("round-trips", () => {
+    expect(joinDuration(splitDuration(3930, true))).toBe(3930);
+    expect(joinDuration(splitDuration(2700, false))).toBe(2700);
   });
 });
 
@@ -63,12 +86,6 @@ describe("duration display", () => {
     expect(formatMinutes(2700)).toBe("45 min");
     expect(formatMinutes(3900)).toBe("1 h 5 min");
     expect(formatMinutes(7200)).toBe("2 h");
-  });
-  it("round-trips through the form", () => {
-    expect(durationInput(2700)).toBe("45");
-    expect(durationInput(1530)).toBe("25:30");
-    expect(parseDuration(durationInput(3930))).toBe(3930);
-    expect(durationInput(null)).toBe("");
   });
 });
 

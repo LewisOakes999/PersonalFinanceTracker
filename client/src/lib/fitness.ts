@@ -23,21 +23,33 @@ export const isCardio = (kind: WorkoutKind) => kindInfo(kind).group === "cardio"
 
 // ── Durations ──────────────────────────────────────────────────────────────
 
+/** The duration boxes as typed: hours, minutes and (for cardio) seconds. */
+export type DurationParts = { h: string; m: string; s: string };
+
 /**
- * Seconds from what someone types: "45" or "45.5" (minutes), "25:30" (m:ss)
- * or "1:05:30" (h:mm:ss). Blank → null; anything unreadable → NaN.
+ * Seconds from the duration boxes. All blank (or all zero) → null, meaning no
+ * time logged; anything that isn't a whole, non-negative number → NaN. Minutes
+ * and seconds may run past 59 — 90 minutes is fine — they're simply added up.
  */
-export function parseDuration(text: string): number | null {
-  const t = text.trim();
-  if (!t) return null;
-  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(Number(t) * 60) || NaN;
-  const parts = t.split(":");
-  if (parts.length < 2 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return NaN;
-  const nums = parts.map(Number);
-  // Everything after the first part is a clock field, so must be under 60.
-  if (nums.slice(1).some((n) => n >= 60)) return NaN;
-  const secs = parts.length === 2 ? nums[0] * 60 + nums[1] : nums[0] * 3600 + nums[1] * 60 + nums[2];
-  return secs > 0 ? secs : NaN;
+export function joinDuration({ h, m, s }: DurationParts): number | null {
+  const parts = [h, m, s].map((x) => x.trim());
+  if (parts.every((x) => x === "")) return null;
+  if (parts.some((x) => x !== "" && !/^\d+$/.test(x))) return NaN;
+  const [hh, mm, ss] = parts.map((x) => (x === "" ? 0 : Number(x)));
+  const total = hh * 3600 + mm * 60 + ss;
+  return total > 0 ? total : null;
+}
+
+/**
+ * A stored duration back into the boxes. Without a seconds box (gym, classes,
+ * sports) it's rounded to the nearest minute.
+ */
+export function splitDuration(sec: number | null, withSeconds: boolean): DurationParts {
+  if (sec === null || sec <= 0) return { h: "", m: "", s: "" };
+  const total = withSeconds ? sec : Math.round(sec / 60) * 60;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return { h: h > 0 ? String(h) : "", m: String(m), s: withSeconds ? String(total % 60) : "" };
 }
 
 /** Clock style, for times where seconds matter: "25:30", "1:05:30". */
@@ -56,12 +68,6 @@ export function formatMinutes(sec: number): string {
   const m = total % 60;
   if (h === 0) return `${m} min`;
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
-}
-
-/** How a stored duration is shown back in the form: plain minutes when whole. */
-export function durationInput(sec: number | null): string {
-  if (sec === null) return "";
-  return sec % 60 === 0 ? String(sec / 60) : formatClock(sec);
 }
 
 // ── Pace ───────────────────────────────────────────────────────────────────
