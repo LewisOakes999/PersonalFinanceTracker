@@ -15,6 +15,7 @@ import type {
   Upcoming,
   Goal,
   InvestmentForecast,
+  InvestmentPerformance,
   IsaAllowance,
   Liability,
   NetWorthPoint,
@@ -215,7 +216,13 @@ export const api = {
     request<Valuation[]>(`/valuations${accountId ? `?accountId=${accountId}` : ""}`),
   createValuation: (data: { accountId: string; date: string; value: number; note?: string | null }) =>
     request<Valuation>("/valuations", { method: "POST", body: JSON.stringify(data) }),
+  updateValuation: (
+    id: string,
+    data: { accountId: string; date: string; value: number; note?: string | null }
+  ) => request<Valuation>(`/valuations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteValuation: (id: string) => request<void>(`/valuations/${id}`, { method: "DELETE" }),
+  investmentPerformance: () =>
+    request<InvestmentPerformance>("/summary/investment-performance"),
 
   // Accounts
   listAccounts: () => request<Account[]>("/accounts"),

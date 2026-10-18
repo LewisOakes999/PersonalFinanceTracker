@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   ArrowLeftRight,
+  ChartCandlestick,
   ChartPie,
   LayoutDashboard,
   Menu,
@@ -23,6 +24,7 @@ import Transactions from "./pages/Transactions";
 import Analytics from "./pages/Analytics";
 import Budgets from "./pages/Budgets";
 import Goals from "./pages/Goals";
+import Investments from "./pages/Investments";
 import Forecast from "./pages/Forecast";
 import Tax from "./pages/Tax";
 import Settings from "./pages/Settings";
@@ -33,6 +35,7 @@ type Tab =
   | "analytics"
   | "budgets"
   | "goals"
+  | "investments"
   | "forecast"
   | "tax"
   | "settings";
@@ -43,6 +46,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "analytics", label: "Analytics", icon: ChartPie },
   { id: "budgets", label: "Budgets", icon: Wallet },
   { id: "goals", label: "Goals", icon: Target },
+  { id: "investments", label: "Investments", icon: ChartCandlestick },
   { id: "forecast", label: "Forecast", icon: TrendingUp },
   { id: "tax", label: "Tax", icon: ReceiptText },
   { id: "settings", label: "Settings", icon: SettingsIcon },
@@ -236,6 +240,7 @@ export default function App() {
           {tab === "analytics" && <Analytics />}
           {tab === "budgets" && <Budgets />}
           {tab === "goals" && <Goals />}
+          {tab === "investments" && <Investments onManageAccounts={() => manage("accounts")} />}
           {tab === "forecast" && <Forecast />}
           {tab === "tax" && <Tax />}
           {tab === "settings" && (

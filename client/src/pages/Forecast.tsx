@@ -18,7 +18,6 @@ import { formatMonthLabel, shortMonthLabel } from "../lib/format";
 import { fittedDomain } from "../lib/chart";
 import { useCurrency } from "../lib/CurrencyContext";
 import { tooltipStyle } from "./Dashboard";
-import InvestmentProjection from "./InvestmentProjection";
 
 const INCOME = "#34e0c4";
 const EXPENSE = "#ff6b8a";
@@ -196,9 +195,6 @@ export default function Forecast() {
           </p>
         </Tile>
       )}
-
-      {/* Investment Monte Carlo projection */}
-      <InvestmentProjection />
 
       {/* Projected balance */}
       <Tile className="p-[22px]">

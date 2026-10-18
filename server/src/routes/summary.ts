@@ -9,6 +9,7 @@ import { resolveRange } from "../lib/range.js";
 import { getConversion } from "../lib/currency.js";
 import { advance } from "../lib/recurfreq.js";
 import { depreciatedValue, depreciationRate } from "../lib/depreciation.js";
+import { investmentPerformance } from "../lib/investmentPerformance.js";
 
 export const summaryRouter = Router();
 
@@ -544,6 +545,16 @@ summaryRouter.get(
       isaAccounts,
       hasIsa: isaAccounts.length > 0,
     });
+  })
+);
+
+// GET /api/summary/investment-performance — for each active investment or
+// pension account: money put in, recorded values, gain/loss, and how the latest
+// value compares with what the forecast expected of that money.
+summaryRouter.get(
+  "/investment-performance",
+  asyncHandler(async (req, res) => {
+    res.json(await investmentPerformance(getUserId(req)));
   })
 );
 

@@ -39,6 +39,55 @@ export interface Valuation {
   note: string | null;
 }
 
+/** One point on an investment's history chart (t = epoch ms). */
+export interface PerformancePoint {
+  t: number;
+  contributed: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  actual?: number; // only on dates a value was recorded
+}
+
+export interface InvestmentAccountPerformance {
+  id: string;
+  name: string;
+  currency: string;
+  isIsa: boolean;
+  isInvestment: boolean;
+  isPension: boolean;
+  expectedReturn: number;
+  volatility: number;
+  since: string;
+  value: number; // current balance, from the latest recorded value
+  contributed: number; // money put in to date
+  addedSinceValuation: number;
+  // Measured at the latest recorded value; null until one is recorded.
+  valuedAt: string | null;
+  valuedValue: number | null;
+  contributedAtValuation: number | null;
+  gain: number | null;
+  gainPct: number | null;
+  forecast: { p10: number; p50: number; p90: number } | null;
+  vsForecast: number | null;
+  position: "below" | "within" | "above" | null;
+  valuations: Valuation[];
+  series: PerformancePoint[];
+}
+
+export interface InvestmentPerformance {
+  baseCurrency: string;
+  accounts: InvestmentAccountPerformance[];
+  totals: {
+    value: number;
+    contributed: number;
+    gain: number;
+    contributedValued: number;
+    vsForecast: number;
+    valuedCount: number;
+  };
+}
+
 export interface Transfer {
   id: string;
   date: string;

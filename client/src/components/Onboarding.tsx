@@ -32,7 +32,7 @@ const STEPS: TourStep[] = [
   {
     tab: "forecast",
     title: "Forecast & tax",
-    body: "Forecast projects your savings with a Monte Carlo simulation and shows your ISA allowance and the figures you need for a UK tax return.",
+    body: "Forecast projects your savings and tracks your ISA allowance, Investments shows how your investments are doing against their forecast, and Tax gathers the figures for a UK tax return.",
   },
   {
     tab: "dashboard",

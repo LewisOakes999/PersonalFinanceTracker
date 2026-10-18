@@ -44,3 +44,25 @@ function niceStep(range: number): number {
   const nice = norm >= 5 ? 5 : norm >= 2 ? 2 : 1;
   return nice * mag;
 }
+
+/**
+ * A fitted domain plus evenly spaced ticks on round numbers (about four
+ * intervals). Passing both stops the chart picking its own ticks inside the
+ * domain, which can leave uneven gaps where it drops a crowded label.
+ */
+export function fittedAxis(
+  values: number[]
+): { domain: [number, number]; ticks: number[] } | undefined {
+  const fitted = fittedDomain(values);
+  if (!fitted) return undefined;
+  const [lo, hi] = fitted;
+  const rough = (hi - lo) / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / mag;
+  const step = (norm > 5 ? 10 : norm > 2 ? 5 : norm > 1 ? 2 : 1) * mag; // round up
+  const min = Math.floor(lo / step) * step;
+  const max = Math.ceil(hi / step) * step;
+  const ticks: number[] = [];
+  for (let v = min; v <= max + step / 2; v += step) ticks.push(Math.round(v * 100) / 100);
+  return { domain: [min, max], ticks };
+}

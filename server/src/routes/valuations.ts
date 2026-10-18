@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { asyncHandler, HttpError } from "../lib/http.js";
 import { getUserId } from "../lib/auth.js";
 import { serialize, serializeMany } from "../lib/serialize.js";
+import { assertOpenOn } from "../lib/accountClose.js";
 
 export const valuationsRouter = Router();
 
@@ -28,15 +29,39 @@ valuationsRouter.get(
   })
 );
 
+/** The account must be the user's, and a value can't be dated in the future or
+ *  after the account went inactive. */
+async function assertValuable(userId: string, accountId: string, date: Date) {
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+  if (!account) throw new HttpError(400, "Account not found");
+  // A day's grace so "today" in a timezone ahead of UTC isn't treated as the future.
+  if (date.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+    throw new HttpError(400, "A value can't be dated in the future.");
+  }
+  assertOpenOn(account, date);
+}
+
 valuationsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
     const data = valuationInput.parse(req.body);
-    const owned = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
-    if (!owned) throw new HttpError(400, "Account not found");
+    await assertValuable(userId, data.accountId, data.date);
     const valuation = await prisma.accountValuation.create({ data: { ...data, userId } });
     res.status(201).json(serialize(valuation));
+  })
+);
+
+valuationsRouter.put(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const data = valuationInput.parse(req.body);
+    const existing = await prisma.accountValuation.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) throw new HttpError(404, "Valuation not found");
+    await assertValuable(userId, data.accountId, data.date);
+    const valuation = await prisma.accountValuation.update({ where: { id: existing.id }, data });
+    res.json(serialize(valuation));
   })
 );
 

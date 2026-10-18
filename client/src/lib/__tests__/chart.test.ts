@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fittedDomain } from "../chart";
+import { fittedAxis, fittedDomain } from "../chart";
 
 describe("fittedDomain", () => {
   it("brackets the data instead of anchoring at zero", () => {
@@ -48,5 +48,26 @@ describe("fittedDomain", () => {
     const [min, max] = fittedDomain([1013, 1987])!;
     expect(Number.isInteger(min)).toBe(true);
     expect(Number.isInteger(max)).toBe(true);
+  });
+});
+
+describe("fittedAxis", () => {
+  it("returns evenly spaced round ticks that span the domain exactly", () => {
+    const axis = fittedAxis([11500, 12500, 13900])!;
+    const gaps = axis.ticks.slice(1).map((t, i) => t - axis.ticks[i]);
+    expect(new Set(gaps).size).toBe(1);
+    expect(axis.ticks[0]).toBe(axis.domain[0]);
+    expect(axis.ticks[axis.ticks.length - 1]).toBe(axis.domain[1]);
+    expect(axis.ticks.length).toBeGreaterThanOrEqual(3);
+    expect(axis.ticks.length).toBeLessThanOrEqual(6);
+  });
+  it("covers every value it was given", () => {
+    const values = [300, 1850, 3900, 5700, 7644];
+    const { domain } = fittedAxis(values)!;
+    expect(domain[0]).toBeLessThanOrEqual(Math.min(...values));
+    expect(domain[1]).toBeGreaterThanOrEqual(Math.max(...values));
+  });
+  it("has nothing to fit with no data", () => {
+    expect(fittedAxis([])).toBeUndefined();
   });
 });
