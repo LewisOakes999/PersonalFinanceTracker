@@ -41,9 +41,10 @@ import { formatDate, formatSigned } from "../lib/format";
 import { toast } from "../lib/toast";
 import { tooltipStyle } from "./Dashboard";
 
-const GOOD = "#34e0c4";
-const ACCENT = "#64d2ff";
-const BLUE = "#0a84ff";
+// Health takes its colour from the area accent (pale green — see index.css),
+// so charts follow light and dark themes too. Gold marks personal bests.
+const ACCENT = "var(--accent-soft)"; // lines and highlighted figures
+const BAR = "rgb(var(--accent-rgb))"; // bars
 const PB = "#ffd60a";
 const MUTED = "rgba(245,245,247,0.55)";
 const AXIS = "rgba(245,245,247,0.45)";
@@ -153,7 +154,7 @@ export default function Fitness() {
               onClick={() => setTab(t.id)}
               className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors ${
                 active
-                  ? "border-[rgba(10,132,255,0.5)] bg-[rgba(10,132,255,0.18)] text-white"
+                  ? "border-[rgb(var(--accent-rgb)/0.5)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
                   : "border-white/10 bg-white/5 text-glass-2 hover:bg-white/10 hover:text-glass"
               }`}
             >
@@ -262,13 +263,13 @@ function Overview({
         <StatTile
           label="This week"
           value={`${thisWeek.workouts} / ${goal}`}
-          tone={met ? "income" : "accent"}
+          tone="accent"
           sub={`${met ? "goal hit" : `${goal - thisWeek.workouts} to go`}${thisWeek.seconds ? ` · ${formatMinutes(thisWeek.seconds)}` : ""}`}
         />
         <StatTile
           label="Streak"
           value={`${run} week${run === 1 ? "" : "s"}`}
-          tone={run > 0 ? "income" : "default"}
+          tone={run > 0 ? "accent" : "default"}
           sub={`hitting ${goal}+ workouts a week`}
         />
         <StatTile
@@ -321,20 +322,21 @@ function Overview({
               />
               <ReferenceLine
                 y={goal}
-                stroke={ACCENT}
+                stroke={MUTED}
                 strokeDasharray="5 4"
-                label={{ value: "goal", position: "insideTopRight", fill: ACCENT, fontSize: 11 }}
+                label={{ value: "goal", position: "insideTopRight", fill: MUTED, fontSize: 11 }}
               />
               <Bar dataKey="workouts" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                 {chart.map((d) => (
-                  <Cell key={d.label} fill={d.hit ? GOOD : BLUE} fillOpacity={d.current && !d.hit ? 0.55 : 1} />
+                  <Cell key={d.label} fill={BAR} fillOpacity={d.hit ? 1 : d.current ? 0.55 : 0.3} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
         <p className="text-glass-3 mt-2 text-[11px]">
-          Green weeks hit your goal. The current week is still in progress, so it never breaks your streak.
+          Solid weeks hit your goal; faded ones fell short. The current week is still in progress, so it
+          never breaks your streak.
         </p>
       </Tile>
 
@@ -369,7 +371,7 @@ function Overview({
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3 text-xs">
-                  <button className="text-[#64d2ff] hover:underline" onClick={() => onEdit(w)}>
+                  <button className="text-[color:var(--accent-soft)] hover:underline" onClick={() => onEdit(w)}>
                     edit
                   </button>
                   <button className="text-[#ff6b8a] hover:underline" onClick={() => onDelete(w)}>
@@ -381,7 +383,7 @@ function Overview({
           })}
         </ul>
         {workouts.length > shown.length && (
-          <button onClick={() => setShowAll(true)} className="text-[#64d2ff] mt-2 text-xs hover:underline">
+          <button onClick={() => setShowAll(true)} className="text-[color:var(--accent-soft)] mt-2 text-xs hover:underline">
             Show all {workouts.length} workouts
           </button>
         )}
@@ -461,7 +463,7 @@ function StrengthView({ progress, onLog }: { progress: ExerciseProgress[]; onLog
                   ? `${change >= 0 ? "+" : "−"}${Math.abs(change)} reps`
                   : formatSigned(Math.round(change * 10) / 10, kg)
             }
-            color={ex.sessions.length < 2 ? undefined : change >= 0 ? GOOD : "#ff6b8a"}
+            color={ex.sessions.length < 2 ? undefined : change >= 0 ? ACCENT : "#ff6b8a"}
             sub={
               ex.sessions.length < 2
                 ? "log it again to compare"
@@ -641,7 +643,7 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
                 onClick={() => setPicked(k)}
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                   on
-                    ? "border-[rgba(10,132,255,0.6)] bg-[rgba(10,132,255,0.18)] text-white"
+                    ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
                     : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
                 }`}
               >
@@ -667,7 +669,7 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
         <StatTile
           label={higherBetter ? "Fastest speed" : "Best pace"}
           value={bests.fastest ? formatPace(kind, bests.fastest.pace) : "—"}
-          tone={bests.fastest ? "income" : "default"}
+          tone={bests.fastest ? "accent" : "default"}
           sub={bests.fastest ? formatDate(bests.fastest.date) : "log distance and time"}
         />
         <StatTile label="All time" value={`${totalKm.toFixed(1)} km`} sub={`${sessions.length} ${label}${sessions.length === 1 ? "" : "s"}`} />
@@ -688,7 +690,7 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
                   formatter={(v: number) => [`${v} km`, "Distance"]}
                   labelFormatter={(l) => `Week of ${l}`}
                 />
-                <Bar dataKey="km" fill={BLUE} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="km" fill={BAR} radius={[4, 4, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -727,9 +729,9 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
                     <Line
                       type="monotone"
                       dataKey="pace"
-                      stroke={GOOD}
+                      stroke={ACCENT}
                       strokeWidth={2.5}
-                      dot={{ r: 3, fill: GOOD, strokeWidth: 0 }}
+                      dot={{ r: 3, fill: ACCENT, strokeWidth: 0 }}
                       isAnimationActive={false}
                     />
                   </LineChart>

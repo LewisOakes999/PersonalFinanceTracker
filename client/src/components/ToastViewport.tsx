@@ -4,7 +4,7 @@ import { dismissToast, subscribeToasts, type ToastItem } from "../lib/toast";
 const STYLES: Record<ToastItem["type"], string> = {
   success: "border-[#34e0c4]/50 text-[#34e0c4]",
   error: "border-[#ff6b8a]/50 text-[#ff9bae]",
-  info: "border-[#64d2ff]/50 text-[#64d2ff]",
+  info: "border-[rgb(var(--accent-rgb)/0.5)] text-[color:var(--accent-soft)]",
 };
 
 export function ToastViewport() {

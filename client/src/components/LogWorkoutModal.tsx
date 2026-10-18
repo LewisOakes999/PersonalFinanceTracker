@@ -252,7 +252,7 @@ export function LogWorkoutModal({
                     key={p.id}
                     className={`inline-flex items-center rounded-lg border text-xs font-medium transition-colors ${
                       on
-                        ? "border-[rgba(10,132,255,0.6)] bg-[rgba(10,132,255,0.18)] text-white"
+                        ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
                         : "border-white/10 bg-white/5 text-glass-2"
                     }`}
                   >
@@ -294,7 +294,7 @@ export function LogWorkoutModal({
                 onClick={() => setKind(k.id)}
                 className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-xs transition-colors ${
                   on
-                    ? "border-[rgba(10,132,255,0.6)] bg-[rgba(10,132,255,0.18)] text-white"
+                    ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
                     : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
                 }`}
               >
@@ -454,7 +454,7 @@ export function LogWorkoutModal({
                   type="button"
                   // A new set starts as a copy of the last — most sets repeat it.
                   onClick={() => updateBlock(b.id, (x) => ({ ...x, sets: [...x.sets, { ...x.sets[x.sets.length - 1] }] }))}
-                  className="text-[#64d2ff] mt-2 text-xs hover:underline"
+                  className="text-[color:var(--accent-soft)] mt-2 text-xs hover:underline"
                 >
                   + Add set
                 </button>

@@ -76,7 +76,7 @@ const TONES: Record<string, string> = {
   default: "var(--lg-text)",
   income: "#34e0c4",
   expense: "#ff6b8a",
-  accent: "#64d2ff",
+  accent: "var(--accent-soft)", // the area's colour: blue for money, green for health
 };
 
 /** A summary stat tile: quiet label, loud number. The value colour is the
@@ -131,7 +131,7 @@ export function Button({
     default:
       "border-white/10 bg-white/5 text-glass hover:bg-white/10 hover:border-white/20",
     primary:
-      "border-[rgba(10,132,255,0.5)] bg-[rgba(10,132,255,0.18)] text-white hover:bg-[rgba(10,132,255,0.28)]",
+      "border-[rgb(var(--accent-rgb)/0.5)] bg-[rgb(var(--accent-rgb)/0.18)] text-white hover:bg-[rgb(var(--accent-rgb)/0.28)]",
     danger:
       "border-[rgba(255,107,138,0.45)] bg-[rgba(255,107,138,0.14)] text-[#ff9bae] hover:bg-[rgba(255,107,138,0.22)]",
     ghost: "border-transparent bg-transparent text-glass-3 hover:text-glass",

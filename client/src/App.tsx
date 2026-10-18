@@ -65,6 +65,10 @@ const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
   { tabs: ["settings"] },
 ];
 
+/** The area a page belongs to, which sets its accent colour (Health is green). */
+const areaOf = (tab: Tab) =>
+  NAV_SECTIONS.find((s) => s.tabs.includes(tab))?.label === "Health" ? "health" : "money";
+
 // Which labelled sections are folded away — a per-device preference, so it
 // lives in this browser. Storage can be unavailable (private mode), hence the guards.
 const NAV_COLLAPSED_KEY = "ss_nav_collapsed";
@@ -78,8 +82,8 @@ function readCollapsed(): string[] {
 }
 
 const ACTIVE_PILL: CSSProperties = {
-  background: "rgba(10,132,255,0.22)",
-  border: "1px solid rgba(10,132,255,0.4)",
+  background: "rgb(var(--accent-rgb) / 0.22)",
+  border: "1px solid rgb(var(--accent-rgb) / 0.4)",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
 };
 
@@ -171,7 +175,7 @@ function SidebarContent({
           <div
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
             style={{
-              background: "rgba(10,132,255,0.35)",
+              background: "rgb(var(--accent-rgb) / 0.35)",
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25)",
             }}
           >
@@ -217,6 +221,11 @@ export default function App() {
       return next;
     });
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Set on <html> rather than the page, so pop-ups (rendered into <body>) follow it.
+  const area = areaOf(tab);
+  useEffect(() => {
+    document.documentElement.dataset.area = area;
+  }, [area]);
   const [txnAccountId, setTxnAccountId] = useState<string | null>(null);
   const [settingsFocus, setSettingsFocus] = useState<string | null>(null);
   const [settingsAccountId, setSettingsAccountId] = useState<string | null>(null);

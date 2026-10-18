@@ -5,7 +5,11 @@
 @layer base {
   :root {
     /* Liquid Glass tokens */
-    --lg-accent: #0a84ff;
+    /* The area accent. Money (and everything else) is blue; Health pages switch
+       it to pale green — the app sets data-area on <html> from the current page. */
+    --accent-rgb: 10 132 255; /* #0a84ff — fills, borders, active states */
+    --accent-soft: #64d2ff; /* lighter tint — links, lines, highlighted figures */
+    --lg-accent: rgb(var(--accent-rgb));
     --lg-glass: rgba(255, 255, 255, 0.055);
     --lg-glass-nested: rgba(255, 255, 255, 0.04);
     --lg-border: rgba(255, 255, 255, 0.1);
@@ -14,6 +18,10 @@
     --lg-text-2: rgba(245, 245, 247, 0.62);
     --lg-text-3: rgba(245, 245, 247, 0.45);
     --lg-surface-solid: #18181d; /* opaque panels, for dense forms over busy pages */
+  }
+  :root[data-area="health"] {
+    --accent-rgb: 112 214 148; /* #70d694 — pale green */
+    --accent-soft: #9fe8b6;
   }
 
   html,
@@ -32,7 +40,7 @@
   }
 
   ::selection {
-    background: rgba(10, 132, 255, 0.35);
+    background: rgb(var(--accent-rgb) / 0.35);
   }
 
   /* Numbers everywhere use tabular figures. */
@@ -57,7 +65,7 @@
   input:focus,
   select:focus,
   textarea:focus {
-    border-color: rgba(10, 132, 255, 0.7);
+    border-color: rgb(var(--accent-rgb) / 0.7);
     background: rgba(255, 255, 255, 0.08);
   }
   select option {
@@ -82,7 +90,7 @@
     width: 16px;
     height: 16px;
     padding: 0;
-    accent-color: #0a84ff;
+    accent-color: rgb(var(--accent-rgb));
     vertical-align: middle;
     backdrop-filter: none;
   }
@@ -155,6 +163,10 @@
   --lg-text-2: rgba(23, 23, 28, 0.66);
   --lg-text-3: rgba(23, 23, 28, 0.46);
   --lg-surface-solid: #ffffff;
+}
+[data-theme="light"][data-area="health"] {
+  --accent-rgb: 46 158 92;
+  --accent-soft: #2e9e5c;
 }
 [data-theme="light"] body {
   background: #eef1f6;
