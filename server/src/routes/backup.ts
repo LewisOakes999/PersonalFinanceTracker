@@ -26,6 +26,9 @@ backupRouter.get(
       assets,
       categoryRules,
       settings,
+      workouts,
+      workoutSets,
+      bodyWeights,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
       prisma.category.findMany({ where: { userId } }),
@@ -42,6 +45,9 @@ backupRouter.get(
       prisma.asset.findMany({ where: { userId } }),
       prisma.categoryRule.findMany({ where: { userId } }),
       prisma.settings.findUnique({ where: { userId } }),
+      prisma.workout.findMany({ where: { userId } }),
+      prisma.workoutSet.findMany({ where: { workout: { userId } } }),
+      prisma.bodyWeight.findMany({ where: { userId } }),
     ]);
 
     res.json({
@@ -62,6 +68,9 @@ backupRouter.get(
       assets,
       categoryRules,
       settings,
+      workouts,
+      workoutSets,
+      bodyWeights,
     });
   })
 );
@@ -134,12 +143,37 @@ backupRouter.post(
       });
     }
 
+    // Fitness data — only replaced when the backup has it, so restoring a
+    // backup made before fitness tracking existed doesn't wipe your workouts.
+    if (Array.isArray(data.workouts)) {
+      await prisma.workout.deleteMany({ where: { userId } }); // sets cascade
+      const workouts = withUser(data.workouts);
+      await prisma.workout.createMany({ data: workouts });
+      // Only attach sets to workouts that were just restored for this user.
+      const ids = new Set(workouts.map((w) => w.id));
+      await prisma.workoutSet.createMany({
+        data: plain(data.workoutSets).filter((s) => ids.has(s?.workoutId)),
+      });
+    }
+    if (Array.isArray(data.bodyWeights)) {
+      await prisma.bodyWeight.deleteMany({ where: { userId } });
+      await prisma.bodyWeight.createMany({ data: withUser(data.bodyWeights) });
+    }
+    if (typeof data.settings?.weeklyWorkoutGoal === "number") {
+      await prisma.settings.upsert({
+        where: { userId },
+        update: { weeklyWorkoutGoal: data.settings.weeklyWorkoutGoal },
+        create: { userId, weeklyWorkoutGoal: data.settings.weeklyWorkoutGoal },
+      });
+    }
+
     res.json({
       restored: true,
       counts: {
         accounts: data.accounts?.length ?? 0,
         transactions: data.transactions?.length ?? 0,
         transfers: data.transfers?.length ?? 0,
+        workouts: data.workouts?.length ?? 0,
       },
     });
   })

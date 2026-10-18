@@ -24,6 +24,7 @@ import { assetsRouter } from "./routes/assets.js";
 import { budgetsRouter } from "./routes/budgets.js";
 import { summaryRouter } from "./routes/summary.js";
 import { settingsRouter } from "./routes/settings.js";
+import { fitnessRouter } from "./routes/fitness.js";
 import { importRouter } from "./routes/import.js";
 import { exportRouter } from "./routes/export.js";
 import { writeLimiter } from "./lib/ratelimit.js";
@@ -72,6 +73,7 @@ app.use("/api/assets", assetsRouter);
 app.use("/api/budgets", budgetsRouter);
 app.use("/api/summary", summaryRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/fitness", fitnessRouter);
 app.use("/api/import", importRouter);
 app.use("/api/export", exportRouter);
 

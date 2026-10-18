@@ -35,6 +35,8 @@ model User {
   assets       Asset[]
   categoryRules CategoryRule[]
   settings     Settings?
+  workouts     Workout[]
+  bodyWeights  BodyWeight[]
 }
 
 model CategoryRule {
@@ -325,7 +327,51 @@ model Goal {
 
 // Per-user application settings (display currency, etc.).
 model Settings {
-  userId   String @id
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currency String @default("GBP")
+  userId            String @id
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency          String @default("GBP")
+  weeklyWorkoutGoal Int    @default(3) // workouts per week, for the fitness streak
+}
+
+// A logged workout. Strength sessions carry sets; runs, rides, swims and walks
+// carry a distance; classes and sports just a duration.
+model Workout {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  kind        String // strength | run | cycle | swim | walk | class | sport | other
+  title       String       @default("")
+  durationSec Int? // seconds, so a run's pace is exact
+  distanceKm  Decimal?     @db.Decimal(8, 3)
+  notes       String?
+  sets        WorkoutSet[]
+  createdAt   DateTime     @default(now())
+
+  @@index([userId, date])
+}
+
+// One set of a strength exercise. Exercise names are free text, matched
+// case-insensitively, so progress follows a lift from workout to workout.
+model WorkoutSet {
+  id        String  @id @default(cuid())
+  workoutId String
+  workout   Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  position  Int // order within the workout
+  exercise  String
+  reps      Int
+  weightKg  Decimal @db.Decimal(7, 2) // 0 for bodyweight moves
+
+  @@index([workoutId])
+}
+
+model BodyWeight {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  weightKg  Decimal  @db.Decimal(6, 2)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date]) // one weigh-in per day; logging again replaces it
 }

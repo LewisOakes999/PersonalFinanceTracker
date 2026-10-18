@@ -28,7 +28,22 @@ import type {
   Valuation,
   TrendPoint,
   User,
+  BodyWeight,
+  Workout,
+  WorkoutKind,
+  WorkoutSet,
 } from "../types";
+
+/** What the workout form sends: the full workout, sets included. */
+export type WorkoutInput = {
+  date: string;
+  kind: WorkoutKind;
+  title: string;
+  durationSec: number | null;
+  distanceKm: number | null;
+  notes: string | null;
+  sets: Pick<WorkoutSet, "exercise" | "reps" | "weightKg">[];
+};
 
 import { toast } from "./../lib/toast";
 
@@ -324,6 +339,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  // Fitness
+  listWorkouts: () => request<Workout[]>("/fitness/workouts"),
+  createWorkout: (data: WorkoutInput) =>
+    request<Workout>("/fitness/workouts", { method: "POST", body: JSON.stringify(data) }),
+  updateWorkout: (id: string, data: WorkoutInput) =>
+    request<Workout>(`/fitness/workouts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteWorkout: (id: string) => request<void>(`/fitness/workouts/${id}`, { method: "DELETE" }),
+  listExercises: () => request<string[]>("/fitness/exercises"),
+  listBodyWeights: () => request<BodyWeight[]>("/fitness/body-weights"),
+  logBodyWeight: (data: { date: string; weightKg: number }) =>
+    request<BodyWeight>("/fitness/body-weights", { method: "POST", body: JSON.stringify(data) }),
+  deleteBodyWeight: (id: string) =>
+    request<void>(`/fitness/body-weights/${id}`, { method: "DELETE" }),
+  updateWeeklyGoal: (weeklyWorkoutGoal: number) =>
+    request<Settings>("/settings", { method: "PUT", body: JSON.stringify({ weeklyWorkoutGoal }) }),
 
   // Settings
   getSettings: () => request<Settings>("/settings"),

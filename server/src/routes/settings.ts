@@ -25,9 +25,14 @@ settingsRouter.put(
   "/",
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
-    const { currency } = z.object({ currency: z.string().min(1) }).parse(req.body);
+    const data = z
+      .object({
+        currency: z.string().min(1).optional(),
+        weeklyWorkoutGoal: z.number().int().min(1).max(14).optional(),
+      })
+      .parse(req.body);
     await getOrCreateSettings(userId);
-    const settings = await prisma.settings.update({ where: { userId }, data: { currency } });
+    const settings = await prisma.settings.update({ where: { userId }, data });
     res.json(settings);
   })
 );

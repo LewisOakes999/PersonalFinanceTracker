@@ -219,6 +219,34 @@ export interface Budget {
 export interface Settings {
   userId: string;
   currency: string;
+  weeklyWorkoutGoal: number;
+}
+
+export type WorkoutKind = "strength" | "run" | "cycle" | "swim" | "walk" | "class" | "sport" | "other";
+
+export interface WorkoutSet {
+  id?: string;
+  position?: number;
+  exercise: string;
+  reps: number;
+  weightKg: number; // 0 for bodyweight moves
+}
+
+export interface Workout {
+  id: string;
+  date: string;
+  kind: WorkoutKind;
+  title: string;
+  durationSec: number | null;
+  distanceKm: number | null;
+  notes: string | null;
+  sets: WorkoutSet[];
+}
+
+export interface BodyWeight {
+  id: string;
+  date: string;
+  weightKg: number;
 }
 
 export interface Totals {

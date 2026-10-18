@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   ChartCandlestick,
   ChartPie,
+  Dumbbell,
   LayoutDashboard,
   Menu,
   ReceiptText,
@@ -25,6 +26,7 @@ import Analytics from "./pages/Analytics";
 import Budgets from "./pages/Budgets";
 import Goals from "./pages/Goals";
 import Investments from "./pages/Investments";
+import Fitness from "./pages/Fitness";
 import Forecast from "./pages/Forecast";
 import Tax from "./pages/Tax";
 import Settings from "./pages/Settings";
@@ -38,6 +40,7 @@ type Tab =
   | "investments"
   | "forecast"
   | "tax"
+  | "fitness"
   | "settings";
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
@@ -49,8 +52,18 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "investments", label: "Investments", icon: ChartCandlestick },
   { id: "forecast", label: "Forecast", icon: TrendingUp },
   { id: "tax", label: "Tax", icon: ReceiptText },
+  { id: "fitness", label: "Fitness", icon: Dumbbell },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
+
+// The sidebar groups pages by area of life; unlabelled groups sit apart.
+const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
+  { tabs: ["dashboard"] },
+  { label: "Money", tabs: ["transactions", "analytics", "budgets", "goals", "investments", "forecast", "tax"] },
+  { label: "Health", tabs: ["fitness"] },
+  { tabs: ["settings"] },
+];
+
 
 const ACTIVE_PILL: CSSProperties = {
   background: "rgba(10,132,255,0.22)",
@@ -82,27 +95,43 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex flex-1 min-h-0 flex-col gap-1 overflow-y-auto">
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => onNavigate(t.id)}
-              style={active ? ACTIVE_PILL : undefined}
-              className={`flex items-center gap-[11px] rounded-[13px] px-[13px] py-[11px] text-left text-sm transition-colors ${
-                active ? "font-[550] text-white" : "text-glass-2 hover:bg-white/5 hover:text-glass"
-              }`}
-            >
-              <t.icon size={16} strokeWidth={1.75} className="w-5 shrink-0 opacity-90" />
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
+        {NAV_SECTIONS.map((section, si) => (
+          <div
+            key={section.label ?? section.tabs[0]}
+            className={`flex flex-col gap-1 ${si > 0 ? (section.label ? "mt-1.5" : "mt-1.5 border-t border-white/10 pt-1.5") : ""}`}
+          >
+            {section.label && (
+              <div className="text-glass-3 px-[13px] pb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+                {section.label}
+              </div>
+            )}
+            {section.tabs.map((id) => {
+              const t = TABS.find((x) => x.id === id)!;
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onNavigate(t.id)}
+                  style={active ? ACTIVE_PILL : undefined}
+                  className={`flex items-center gap-[11px] rounded-[13px] px-[13px] py-[9px] text-left text-sm transition-colors ${
+                    active ? "font-[550] text-white" : "text-glass-2 hover:bg-white/5 hover:text-glass"
+                  }`}
+                >
+                  <t.icon size={16} strokeWidth={1.75} className="w-5 shrink-0 opacity-90" />
+                  <span>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Tips + user chip, pinned to the bottom */}
       <div className="flex flex-col gap-[14px]">
-        <SidebarTips />
+        {/* On short screens the tips give way, so every page stays reachable. */}
+        <div className="[@media(max-height:899px)]:hidden">
+          <SidebarTips />
+        </div>
         <div className="glass-nested flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2.5">
           <div
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
@@ -243,6 +272,7 @@ export default function App() {
           {tab === "investments" && <Investments onManageAccounts={() => manage("accounts")} />}
           {tab === "forecast" && <Forecast />}
           {tab === "tax" && <Tax />}
+          {tab === "fitness" && <Fitness />}
           {tab === "settings" && (
             <Settings
               focusSection={settingsFocus}
