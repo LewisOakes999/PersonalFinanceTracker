@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CalendarCheck, Dumbbell, Plus, Route, Scale, type LucideIcon } from "lucide-react";
+import { Plus } from "lucide-react";
 import { api } from "../api/client";
 import type { BodyWeight, Workout, WorkoutKind, WorkoutPreset } from "../types";
 import { Button, Field, SectionTitle, StatTile, Tile } from "../components/ui";
@@ -50,13 +50,15 @@ const MUTED = "rgba(245,245,247,0.55)";
 const AXIS = "rgba(245,245,247,0.45)";
 const CARDIO: WorkoutKind[] = ["run", "cycle", "swim", "walk"];
 
-type FitTab = "overview" | "strength" | "cardio" | "weight";
-const FIT_TABS: { id: FitTab; label: string; icon: LucideIcon }[] = [
-  { id: "overview", label: "Overview", icon: CalendarCheck },
-  { id: "strength", label: "Strength", icon: Dumbbell },
-  { id: "cardio", label: "Cardio", icon: Route },
-  { id: "weight", label: "Body weight", icon: Scale },
-];
+/** Which part of Fitness to show — each is its own page in the sidebar's Health section. */
+export type FitnessView = "overview" | "strength" | "cardio" | "weight";
+
+const HEADINGS: Record<FitnessView, { title: string; blurb: string }> = {
+  overview: { title: "Fitness overview", blurb: "Your week, your streak and your recent workouts" },
+  strength: { title: "Strength", blurb: "Each lift's progress and personal bests" },
+  cardio: { title: "Cardio", blurb: "Distance and pace for your runs, rides, swims and walks" },
+  weight: { title: "Body weight", blurb: "Your weight and body fat over time" },
+};
 
 /** "14 Oct" — for chart axes, where the year is noise. */
 const shortDate = (iso: string | Date) =>
@@ -65,12 +67,11 @@ const shortDate = (iso: string | Date) =>
 // Up to two decimals, so 1.25 kg plate jumps (73.75 kg) show exactly.
 const kg = (n: number) => `${parseFloat(n.toFixed(2))} kg`;
 
-export default function Fitness() {
+export default function Fitness({ view = "overview" }: { view?: FitnessView } = {}) {
   const [workouts, setWorkouts] = useState<Workout[] | null>(null);
   const [weights, setWeights] = useState<BodyWeight[]>([]);
   const [presets, setPresets] = useState<WorkoutPreset[]>([]);
   const [goal, setGoal] = useState(3);
-  const [tab, setTab] = useState<FitTab>("overview");
   const [editing, setEditing] = useState<Workout | "new" | null>(null);
 
   const loadWorkouts = () => api.listWorkouts().then((w) => (setWorkouts(w), w));
@@ -135,37 +136,15 @@ export default function Fitness() {
     <div className="space-y-4">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-glass">Fitness</h1>
-          <p className="text-glass-3 mt-1 text-[13px]">Your workouts, and how you're progressing</p>
+          <h1 className="text-[26px] font-semibold tracking-tight text-glass">{HEADINGS[view].title}</h1>
+          <p className="text-glass-3 mt-1 text-[13px]">{HEADINGS[view].blurb}</p>
         </div>
         <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditing("new")}>
           <Plus size={14} strokeWidth={2} /> Log Workout
         </Button>
       </header>
 
-      <div className="flex flex-wrap gap-2" role="tablist">
-        {FIT_TABS.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors ${
-                active
-                  ? "border-[rgb(var(--accent-rgb)/0.5)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
-                  : "border-white/10 bg-white/5 text-glass-2 hover:bg-white/10 hover:text-glass"
-              }`}
-            >
-              <t.icon size={14} strokeWidth={2} />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {workouts && tab === "overview" && (
+      {workouts && view === "overview" && (
         <Overview
           workouts={workouts}
           goal={goal}
@@ -176,9 +155,9 @@ export default function Fitness() {
           onDelete={remove}
         />
       )}
-      {workouts && tab === "strength" && <StrengthView progress={progress} onLog={() => setEditing("new")} />}
-      {workouts && tab === "cardio" && <CardioView workouts={workouts} onLog={() => setEditing("new")} />}
-      {tab === "weight" && <WeightView weights={weights} onChanged={loadWeights} />}
+      {workouts && view === "strength" && <StrengthView progress={progress} onLog={() => setEditing("new")} />}
+      {workouts && view === "cardio" && <CardioView workouts={workouts} onLog={() => setEditing("new")} />}
+      {view === "weight" && <WeightView weights={weights} onChanged={loadWeights} />}
 
       {editing && (
         <LogWorkoutModal

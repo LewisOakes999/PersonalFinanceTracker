@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   ArrowLeftRight,
+  CalendarCheck,
   ChartCandlestick,
   ChartPie,
   ChevronDown,
@@ -9,6 +10,8 @@ import {
   LayoutDashboard,
   Menu,
   ReceiptText,
+  Route,
+  Scale,
   Settings as SettingsIcon,
   Target,
   TrendingUp,
@@ -27,7 +30,7 @@ import Analytics from "./pages/Analytics";
 import Budgets from "./pages/Budgets";
 import Goals from "./pages/Goals";
 import Investments from "./pages/Investments";
-import Fitness from "./pages/Fitness";
+import Fitness, { type FitnessView } from "./pages/Fitness";
 import Forecast from "./pages/Forecast";
 import Tax from "./pages/Tax";
 import Settings from "./pages/Settings";
@@ -42,6 +45,9 @@ type Tab =
   | "forecast"
   | "tax"
   | "fitness"
+  | "strength"
+  | "cardio"
+  | "weight"
   | "settings";
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
@@ -53,7 +59,10 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "investments", label: "Investments", icon: ChartCandlestick },
   { id: "forecast", label: "Forecast", icon: TrendingUp },
   { id: "tax", label: "Tax", icon: ReceiptText },
-  { id: "fitness", label: "Fitness", icon: Dumbbell },
+  { id: "fitness", label: "Overview", icon: CalendarCheck },
+  { id: "strength", label: "Strength", icon: Dumbbell },
+  { id: "cardio", label: "Cardio", icon: Route },
+  { id: "weight", label: "Body weight", icon: Scale },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -61,9 +70,17 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
 const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
   { tabs: ["dashboard"] },
   { label: "Money", tabs: ["transactions", "analytics", "budgets", "goals", "investments", "forecast", "tax"] },
-  { label: "Health", tabs: ["fitness"] },
+  { label: "Health", tabs: ["fitness", "strength", "cardio", "weight"] },
   { tabs: ["settings"] },
 ];
+
+/** The Fitness view each Health page shows. */
+const FITNESS_VIEWS: Partial<Record<Tab, FitnessView>> = {
+  fitness: "overview",
+  strength: "strength",
+  cardio: "cardio",
+  weight: "weight",
+};
 
 /** The area a page belongs to, which sets its accent colour (Health is green). */
 const areaOf = (tab: Tab) =>
@@ -102,6 +119,32 @@ function SidebarContent({
   collapsed: string[];
   onToggleSection: (label: string) => void;
 }) {
+  // The tips card gives way when the nav would otherwise have to scroll, and
+  // comes back once there's room again — e.g. after folding a section.
+  const navRef = useRef<HTMLElement>(null);
+  const tipsRef = useRef<HTMLDivElement>(null);
+  const tipsSpace = useRef(180); // last measured height of the tips card, plus its gap
+  const [showTips, setShowTips] = useState(true);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const nav = navRef.current;
+      const first = nav?.firstElementChild;
+      const last = nav?.lastElementChild;
+      if (!nav || !first || !last) return;
+      if (tipsRef.current && tipsRef.current.offsetHeight > 0) {
+        tipsSpace.current = tipsRef.current.offsetHeight + 14;
+      }
+      const content = last.getBoundingClientRect().bottom - first.getBoundingClientRect().top;
+      const spare = nav.clientHeight - content;
+      // Hide as soon as it doesn't fit; only return when the whole card would.
+      // The gap between the two thresholds stops it flickering.
+      setShowTips((shown) => (shown ? spare >= 0 : spare >= tipsSpace.current));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [collapsed, tab, showTips]);
+
   return (
     <div className="glass flex h-full w-full min-w-0 flex-col gap-[18px] rounded-3xl px-4 py-5">
       {/* Brand lockup */}
@@ -114,7 +157,7 @@ function SidebarContent({
       </div>
 
       {/* Nav */}
-      <nav className="flex flex-1 min-h-0 flex-col gap-1 overflow-y-auto">
+      <nav ref={navRef} className="flex flex-1 min-h-0 flex-col gap-1 overflow-y-auto">
         {NAV_SECTIONS.map((section, si) => {
           const folded = !!section.label && collapsed.includes(section.label);
           // A folded section still shows the page you're on, so you never lose your place.
@@ -167,8 +210,8 @@ function SidebarContent({
 
       {/* Tips + user chip, pinned to the bottom */}
       <div className="flex flex-col gap-[14px]">
-        {/* On short screens the tips give way, so every page stays reachable. */}
-        <div className="[@media(max-height:899px)]:hidden">
+        {/* Gives way when the nav needs the room, so every page stays reachable. */}
+        <div ref={tipsRef} className={showTips ? "" : "hidden"}>
           <SidebarTips />
         </div>
         <div className="glass-nested flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2.5">
@@ -341,7 +384,8 @@ export default function App() {
           {tab === "investments" && <Investments onManageAccounts={() => manage("accounts")} />}
           {tab === "forecast" && <Forecast />}
           {tab === "tax" && <Tax />}
-          {tab === "fitness" && <Fitness />}
+          {/* One Fitness page for all four views, so moving between them keeps its data. */}
+          {FITNESS_VIEWS[tab] && <Fitness view={FITNESS_VIEWS[tab]} />}
           {tab === "settings" && (
             <Settings
               focusSection={settingsFocus}
