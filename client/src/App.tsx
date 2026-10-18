@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   ChartCandlestick,
   ChartPie,
+  ChevronDown,
   Dumbbell,
   LayoutDashboard,
   Menu,
@@ -64,6 +65,17 @@ const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
   { tabs: ["settings"] },
 ];
 
+// Which labelled sections are folded away — a per-device preference, so it
+// lives in this browser. Storage can be unavailable (private mode), hence the guards.
+const NAV_COLLAPSED_KEY = "ss_nav_collapsed";
+function readCollapsed(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(NAV_COLLAPSED_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 const ACTIVE_PILL: CSSProperties = {
   background: "rgba(10,132,255,0.22)",
@@ -76,11 +88,15 @@ function SidebarContent({
   onNavigate,
   email,
   onSignOut,
+  collapsed,
+  onToggleSection,
 }: {
   tab: Tab;
   onNavigate: (id: Tab) => void;
   email?: string;
   onSignOut: () => void;
+  collapsed: string[];
+  onToggleSection: (label: string) => void;
 }) {
   return (
     <div className="glass flex h-full w-full min-w-0 flex-col gap-[18px] rounded-3xl px-4 py-5">
@@ -95,35 +111,54 @@ function SidebarContent({
 
       {/* Nav */}
       <nav className="flex flex-1 min-h-0 flex-col gap-1 overflow-y-auto">
-        {NAV_SECTIONS.map((section, si) => (
-          <div
-            key={section.label ?? section.tabs[0]}
-            className={`flex flex-col gap-1 ${si > 0 ? (section.label ? "mt-1.5" : "mt-1.5 border-t border-white/10 pt-1.5") : ""}`}
-          >
-            {section.label && (
-              <div className="text-glass-3 px-[13px] pb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
-                {section.label}
-              </div>
-            )}
-            {section.tabs.map((id) => {
-              const t = TABS.find((x) => x.id === id)!;
-              const active = tab === t.id;
-              return (
+        {NAV_SECTIONS.map((section, si) => {
+          const folded = !!section.label && collapsed.includes(section.label);
+          // A folded section still shows the page you're on, so you never lose your place.
+          const shown = folded ? section.tabs.filter((id) => id === tab) : section.tabs;
+          return (
+            <div
+              key={section.label ?? section.tabs[0]}
+              className={`flex flex-col gap-1 ${si > 0 ? (section.label ? "mt-1.5" : "mt-1.5 border-t border-white/10 pt-1.5") : ""}`}
+            >
+              {section.label && (
                 <button
-                  key={t.id}
-                  onClick={() => onNavigate(t.id)}
-                  style={active ? ACTIVE_PILL : undefined}
-                  className={`flex items-center gap-[11px] rounded-[13px] px-[13px] py-[9px] text-left text-sm transition-colors ${
-                    active ? "font-[550] text-white" : "text-glass-2 hover:bg-white/5 hover:text-glass"
-                  }`}
+                  type="button"
+                  onClick={() => onToggleSection(section.label!)}
+                  aria-expanded={!folded}
+                  title={folded ? `Show ${section.label}` : `Hide ${section.label}`}
+                  className="text-glass-3 hover:text-glass flex items-center gap-1.5 rounded-md px-[13px] py-0.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors"
                 >
-                  <t.icon size={16} strokeWidth={1.75} className="w-5 shrink-0 opacity-90" />
-                  <span>{t.label}</span>
+                  <span>{section.label}</span>
+                  {folded && (
+                    <span className="num font-normal normal-case tracking-normal">· {section.tabs.length}</span>
+                  )}
+                  <ChevronDown
+                    size={12}
+                    strokeWidth={2.25}
+                    className={`ml-auto transition-transform duration-200 ${folded ? "-rotate-90" : ""}`}
+                  />
                 </button>
-              );
-            })}
-          </div>
-        ))}
+              )}
+              {shown.map((id) => {
+                const t = TABS.find((x) => x.id === id)!;
+                const active = tab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => onNavigate(t.id)}
+                    style={active ? ACTIVE_PILL : undefined}
+                    className={`flex items-center gap-[11px] rounded-[13px] px-[13px] py-[9px] text-left text-sm transition-colors ${
+                      active ? "font-[550] text-white" : "text-glass-2 hover:bg-white/5 hover:text-glass"
+                    }`}
+                  >
+                    <t.icon size={16} strokeWidth={1.75} className="w-5 shrink-0 opacity-90" />
+                    <span>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Tips + user chip, pinned to the bottom */}
@@ -170,6 +205,17 @@ function SidebarContent({
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState<string[]>(readCollapsed);
+  const toggleNavSection = (label: string) =>
+    setNavCollapsed((current) => {
+      const next = current.includes(label) ? current.filter((x) => x !== label) : [...current, label];
+      try {
+        localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        /* not remembered this time — the toggle still works */
+      }
+      return next;
+    });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [txnAccountId, setTxnAccountId] = useState<string | null>(null);
   const [settingsFocus, setSettingsFocus] = useState<string | null>(null);
@@ -241,7 +287,14 @@ export default function App() {
 
         {/* Desktop sidebar (always visible ≥ md) */}
         <aside className="hidden w-[248px] shrink-0 overflow-hidden p-[18px] md:flex">
-          <SidebarContent tab={tab} onNavigate={go} email={user?.email} onSignOut={logout} />
+          <SidebarContent
+            tab={tab}
+            onNavigate={go}
+            email={user?.email}
+            onSignOut={logout}
+            collapsed={navCollapsed}
+            onToggleSection={toggleNavSection}
+          />
         </aside>
 
         {/* Mobile drawer (mounted only when open, < md) — `contents` so the
@@ -250,7 +303,14 @@ export default function App() {
           <div className="contents md:hidden">
             <div className="fixed inset-0 z-30 bg-black/60" onClick={() => setNavOpen(false)} aria-hidden />
             <aside className="fixed inset-y-0 left-0 z-40 flex w-[248px] overflow-hidden p-[18px]">
-              <SidebarContent tab={tab} onNavigate={go} email={user?.email} onSignOut={logout} />
+              <SidebarContent
+                tab={tab}
+                onNavigate={go}
+                email={user?.email}
+                onSignOut={logout}
+                collapsed={navCollapsed}
+                onToggleSection={toggleNavSection}
+              />
             </aside>
           </div>
         )}
