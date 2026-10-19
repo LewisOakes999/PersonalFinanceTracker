@@ -39,6 +39,7 @@ model User {
   workoutPresets WorkoutPreset[]
   bodyWeights  BodyWeight[]
   fitnessGoals FitnessGoal[]
+  gear         Gear[]
 }
 
 model CategoryRule {
@@ -173,6 +174,7 @@ model Transaction {
   recurring   RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
   splits      TransactionSplit[]
   attachments Attachment[]
+  gear        Gear[] // kit this bought, over in Health
   createdAt   DateTime @default(now())
 
   @@index([userId])
@@ -352,9 +354,12 @@ model Workout {
   // be null, not both), and the recovery between them. Empty for a steady run.
   intervals   Json         @default("[]")
   recoverySec Int?
+  gearId      String? // the shoes, bike or other kit used
+  gear        Gear?        @relation(fields: [gearId], references: [id], onDelete: SetNull)
   createdAt   DateTime     @default(now())
 
   @@index([userId, date])
+  @@index([gearId])
 }
 
 // One set of a strength exercise. Exercise names are free text, matched
@@ -401,6 +406,28 @@ model BodyWeight {
   createdAt  DateTime @default(now())
 
   @@unique([userId, date]) // one weigh-in per day; logging again replaces it
+}
+
+// A piece of kit — running shoes, a bike — that workouts are logged with. It
+// can link to the transaction that bought it, which is where Health meets
+// Money: its price spread over the distance and sessions it's been used for.
+model Gear {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  kinds         String[] // the workout kinds it's used for, e.g. run and walk
+  transactionId String? // the purchase, if it's in Money
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  price         Decimal?     @db.Decimal(10, 2) // what it cost (filled from the purchase, editable)
+  boughtOn      DateTime?
+  startKm       Decimal      @default(0) @db.Decimal(8, 1) // distance already on it when added
+  lifespanKm    Int? // when to think about replacing it, e.g. 650 for running shoes
+  retiredAt     DateTime?
+  workouts      Workout[]
+  createdAt     DateTime     @default(now())
+
+  @@index([userId])
 }
 
 // A fitness target: a lift, a time over a distance, or a body weight or body

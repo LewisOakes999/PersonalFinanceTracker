@@ -54,6 +54,7 @@ const workoutInput = z.object({
   sets: setsInput,
   intervals: intervalsInput,
   recoverySec: recoveryInput,
+  gearId: z.string().min(1).nullable().optional(),
 });
 type WorkoutInput = z.infer<typeof workoutInput>;
 
@@ -76,7 +77,15 @@ function normalise(data: WorkoutInput) {
     notes: data.notes || null,
     sets: strength ? data.sets : [],
     ...intervalFields(data),
+    gearId: data.gearId ?? null,
   };
+}
+
+/** Kit can only be your own. */
+async function assertGear(userId: string, gearId: string | null) {
+  if (gearId && !(await prisma.gear.findFirst({ where: { id: gearId, userId }, select: { id: true } }))) {
+    throw new HttpError(400, "That kit wasn't found.");
+  }
 }
 
 /** Reps belong to runs only; recovery only means something with reps. */
@@ -125,6 +134,7 @@ fitnessRouter.post(
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
     const { sets, ...data } = normalise(workoutInput.parse(req.body));
+    await assertGear(userId, data.gearId);
     const workout = await prisma.workout.create({
       data: { ...data, userId, sets: { create: setRows(sets) } },
       include,
@@ -139,6 +149,7 @@ fitnessRouter.put(
   asyncHandler(async (req, res) => {
     const userId = getUserId(req);
     const { sets, ...data } = normalise(workoutInput.parse(req.body));
+    await assertGear(userId, data.gearId);
     const existing = await prisma.workout.findFirst({ where: { id: req.params.id, userId } });
     if (!existing) throw new HttpError(404, "Workout not found");
     const [, workout] = await prisma.$transaction([
@@ -424,6 +435,99 @@ fitnessRouter.delete(
       where: { id: req.params.id, userId: getUserId(req) },
     });
     if (result.count === 0) throw new HttpError(404, "Goal not found");
+    res.status(204).end();
+  })
+);
+
+// Kit — shoes, a bike — that workouts are logged with, optionally linked to
+// the transaction that bought it. Distance and cost per km are worked out on
+// the client from the workouts that used it.
+const gearInput = z.object({
+  name: z.string().trim().min(1).max(60),
+  kinds: z.array(z.enum(WORKOUT_KINDS)).min(1).max(WORKOUT_KINDS.length),
+  transactionId: z.string().min(1).nullable().optional(),
+  price: z.number().min(0).max(1_000_000).nullable().optional(),
+  boughtOn: z.coerce.date().nullable().optional(),
+  startKm: z.number().min(0).max(100_000).default(0),
+  lifespanKm: z.number().int().min(1).max(100_000).nullable().optional(),
+  retiredAt: z.coerce.date().nullable().optional(),
+});
+
+const gearInclude = {
+  transaction: {
+    select: { id: true, date: true, amount: true, description: true, account: { select: { name: true, currency: true } } },
+  },
+};
+type GearRow = Prisma.GearGetPayload<{ include: typeof gearInclude }>;
+const shapeGear = (g: GearRow) => ({
+  ...g,
+  kinds: [...new Set(g.kinds)],
+  price: g.price === null ? null : toNumber(g.price),
+  startKm: toNumber(g.startKm),
+  transaction: g.transaction && { ...g.transaction, amount: toNumber(g.transaction.amount) },
+});
+
+async function gearFields(userId: string, data: z.infer<typeof gearInput>) {
+  // A linked purchase must be one of your own spends.
+  if (data.transactionId) {
+    const txn = await prisma.transaction.findFirst({
+      where: { id: data.transactionId, userId, type: "expense" },
+      select: { id: true },
+    });
+    if (!txn) throw new HttpError(400, "That purchase wasn't found.");
+  }
+  return {
+    name: data.name,
+    kinds: [...new Set(data.kinds)],
+    transactionId: data.transactionId ?? null,
+    price: data.price ?? null,
+    boughtOn: data.boughtOn ?? null,
+    startKm: data.startKm,
+    lifespanKm: data.lifespanKm ?? null,
+    retiredAt: data.retiredAt ?? null,
+  };
+}
+
+fitnessRouter.get(
+  "/gear",
+  asyncHandler(async (req, res) => {
+    const gear = await prisma.gear.findMany({
+      where: { userId: getUserId(req) },
+      orderBy: { createdAt: "asc" },
+      include: gearInclude,
+    });
+    res.json(gear.map(shapeGear));
+  })
+);
+
+fitnessRouter.post(
+  "/gear",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const fields = await gearFields(userId, gearInput.parse(req.body));
+    const gear = await prisma.gear.create({ data: { ...fields, userId }, include: gearInclude });
+    res.status(201).json(shapeGear(gear));
+  })
+);
+
+fitnessRouter.put(
+  "/gear/:id",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const fields = await gearFields(userId, gearInput.parse(req.body));
+    const existing = await prisma.gear.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) throw new HttpError(404, "Kit not found");
+    const gear = await prisma.gear.update({ where: { id: existing.id }, data: fields, include: gearInclude });
+    res.json(shapeGear(gear));
+  })
+);
+
+// Workouts that used it keep their place; they just lose the link.
+fitnessRouter.delete(
+  "/gear/:id",
+  asyncHandler(async (req, res) => {
+    const result = await prisma.gear.deleteMany({ where: { id: req.params.id, userId: getUserId(req) } });
+    if (result.count === 0) throw new HttpError(404, "Kit not found");
     res.status(204).end();
   })
 );

@@ -30,6 +30,7 @@ import type {
   User,
   BodyWeight,
   FitnessGoal,
+  Gear,
   IntervalRep,
   Workout,
   WorkoutKind,
@@ -48,7 +49,14 @@ export type WorkoutInput = {
   sets: Pick<WorkoutSet, "exercise" | "reps" | "weightKg">[];
   intervals: IntervalRep[];
   recoverySec: number | null;
+  gearId: string | null;
 };
+
+/** What the kit form sends. */
+export type GearInput = Pick<
+  Gear,
+  "name" | "kinds" | "transactionId" | "price" | "boughtOn" | "startKm" | "lifespanKm" | "retiredAt"
+>;
 
 /** What the goal form sends: the fields for its type, plus an optional deadline. */
 export type FitnessGoalInput = Pick<
@@ -365,9 +373,14 @@ export const api = {
   deleteBodyWeight: (id: string) =>
     request<void>(`/fitness/body-weights/${id}`, { method: "DELETE" }),
   listPresets: () => request<WorkoutPreset[]>("/fitness/presets"),
-  savePreset: (data: Omit<WorkoutInput, "date" | "notes"> & { name: string }) =>
+  savePreset: (data: Omit<WorkoutInput, "date" | "notes" | "gearId"> & { name: string }) =>
     request<WorkoutPreset>("/fitness/presets", { method: "POST", body: JSON.stringify(data) }),
   deletePreset: (id: string) => request<void>(`/fitness/presets/${id}`, { method: "DELETE" }),
+  listGear: () => request<Gear[]>("/fitness/gear"),
+  createGear: (data: GearInput) => request<Gear>("/fitness/gear", { method: "POST", body: JSON.stringify(data) }),
+  updateGear: (id: string, data: GearInput) =>
+    request<Gear>(`/fitness/gear/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteGear: (id: string) => request<void>(`/fitness/gear/${id}`, { method: "DELETE" }),
   listFitnessGoals: () => request<FitnessGoal[]>("/fitness/goals"),
   createFitnessGoal: (data: FitnessGoalInput) =>
     request<FitnessGoal>("/fitness/goals", { method: "POST", body: JSON.stringify(data) }),

@@ -15,10 +15,12 @@ import {
 } from "recharts";
 import { Plus } from "lucide-react";
 import { api } from "../api/client";
-import type { BodyWeight, FitnessGoal, Workout, WorkoutKind, WorkoutPreset } from "../types";
+import type { BodyWeight, FitnessGoal, Gear, Workout, WorkoutKind, WorkoutPreset } from "../types";
 import { Button, Field, SectionTitle, StatTile, Tile } from "../components/ui";
 import { LogWorkoutModal } from "../components/LogWorkoutModal";
 import { GoalModal, GoalsTile, GoalsView } from "../components/FitnessGoals";
+import { KitModal, KitView } from "../components/Kit";
+import { defaultKit } from "../lib/kit";
 import { goalStatus, goalTitle, newlyReached, type GoalStatus } from "../lib/goals";
 import {
   byBodyFat,
@@ -59,7 +61,7 @@ const AXIS = "rgba(245,245,247,0.45)";
 const CARDIO: WorkoutKind[] = ["run", "cycle", "swim", "walk"];
 
 /** Which part of Fitness to show — each is its own page in the sidebar's Health section. */
-export type FitnessView = "overview" | "strength" | "cardio" | "weight" | "goals";
+export type FitnessView = "overview" | "strength" | "cardio" | "weight" | "goals" | "kit";
 
 const HEADINGS: Record<FitnessView, { title: string; blurb: string }> = {
   overview: { title: "Fitness overview", blurb: "Your week, your streak and your recent workouts" },
@@ -67,6 +69,7 @@ const HEADINGS: Record<FitnessView, { title: string; blurb: string }> = {
   cardio: { title: "Cardio", blurb: "Distance and pace for your runs, rides, swims and walks" },
   weight: { title: "Body weight", blurb: "Your weight and body fat over time" },
   goals: { title: "Fitness goals", blurb: "Targets for your lifts, times and weight, and when you'll reach them" },
+  kit: { title: "Kit & costs", blurb: "How far your kit has gone, and what it's cost per km" },
 };
 
 /** "14 Oct" — for chart axes, where the year is noise. */
@@ -87,14 +90,18 @@ export default function Fitness({
   const [editing, setEditing] = useState<Workout | "new" | null>(null);
   const [goals, setGoals] = useState<FitnessGoal[]>([]);
   const [editingGoal, setEditingGoal] = useState<FitnessGoal | "new" | null>(null);
+  const [gear, setGear] = useState<Gear[]>([]);
+  const [editingKit, setEditingKit] = useState<Gear | "new" | null>(null);
 
   const loadWorkouts = () => api.listWorkouts().then((w) => (setWorkouts(w), w));
   const loadWeights = () => api.listBodyWeights().then((w) => (setWeights(w), w));
   const loadPresets = () => api.listPresets().then(setPresets).catch(() => setPresets([]));
   const loadGoals = () => api.listFitnessGoals().then(setGoals).catch(() => setGoals([]));
+  const loadGear = () => api.listGear().then(setGear).catch(() => setGear([]));
   useEffect(() => {
     loadPresets();
     loadGoals();
+    loadGear();
     loadWorkouts().catch((e) => toast.error((e as Error).message));
     loadWeights().catch(() => setWeights([]));
     api
@@ -160,6 +167,12 @@ export default function Fitness({
     loadGoals();
   };
 
+  const kitSaved = (g: Gear) => {
+    toast.success(editingKit === "new" ? `Added “${g.name}”.` : "Kit updated.");
+    setEditingKit(null);
+    loadGear();
+  };
+
   const removeGoal = async (g: FitnessGoal) => {
     if (!confirm(`Delete the goal "${goalTitle(g)}"?`)) return;
     try {
@@ -202,6 +215,10 @@ export default function Fitness({
           <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditingGoal("new")}>
             <Plus size={14} strokeWidth={2} /> New Goal
           </Button>
+        ) : view === "kit" ? (
+          <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditingKit("new")}>
+            <Plus size={14} strokeWidth={2} /> Add Kit
+          </Button>
         ) : (
           <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditing("new")}>
             <Plus size={14} strokeWidth={2} /> Log Workout
@@ -224,6 +241,7 @@ export default function Fitness({
           onEdit={setEditing}
           onDelete={remove}
           goalsTile={<GoalsTile statuses={statuses} onOpen={() => onView?.("goals")} />}
+          kitNames={new Map(gear.map((g) => [g.id, g.name]))}
         />
       )}
       {workouts && view === "strength" && <StrengthView progress={progress} onLog={() => setEditing("new")} />}
@@ -231,6 +249,15 @@ export default function Fitness({
       {view === "weight" && <WeightView weights={weights} onChanged={weightsChanged} />}
       {workouts && view === "goals" && (
         <GoalsView statuses={statuses} onNew={() => setEditingGoal("new")} onEdit={setEditingGoal} onDelete={removeGoal} />
+      )}
+      {workouts && view === "kit" && (
+        <KitView
+          gear={gear}
+          workouts={workouts}
+          onAdd={() => setEditingKit("new")}
+          onEdit={setEditingKit}
+          onChanged={loadGear}
+        />
       )}
 
       {editing && (
@@ -241,7 +268,12 @@ export default function Fitness({
           onPresetsChanged={loadPresets}
           onClose={() => setEditing(null)}
           onSaved={saved}
+          gear={gear}
+          defaultGear={(kind) => defaultKit(kind, gear, workouts ?? [])}
         />
+      )}
+      {editingKit && (
+        <KitModal gear={editingKit === "new" ? null : editingKit} onClose={() => setEditingKit(null)} onSaved={kitSaved} />
       )}
       {editingGoal && (
         <GoalModal
@@ -282,6 +314,7 @@ function Overview({
   onEdit,
   onDelete,
   goalsTile,
+  kitNames,
 }: {
   workouts: Workout[];
   goal: number;
@@ -291,6 +324,7 @@ function Overview({
   onEdit: (w: Workout) => void;
   onDelete: (w: Workout) => void;
   goalsTile?: ReactNode;
+  kitNames?: Map<string, string>;
 }) {
   const [showAll, setShowAll] = useState(false);
   const weeks = useMemo(() => weeklySummary(workouts, 12), [workouts]);
@@ -434,6 +468,7 @@ function Overview({
                     <span className="text-glass-3 num block text-xs">
                       {formatDate(w.date)}
                       {summary && ` · ${summary}`}
+                      {w.gearId && kitNames?.has(w.gearId) && ` · ${kitNames.get(w.gearId)}`}
                     </span>
                   </span>
                 </span>

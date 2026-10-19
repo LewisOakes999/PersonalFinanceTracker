@@ -39,6 +39,7 @@ const workout = (date: string, kind: WorkoutKind, extra: Partial<Workout> = {}):
   sets: [],
   intervals: [],
   recoverySec: null,
+  gearId: null,
   ...extra,
 });
 const sets = (exercise: string, ...pairs: [number, number][]): WorkoutSet[] =>

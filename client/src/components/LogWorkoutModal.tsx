@@ -1,8 +1,8 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { BookmarkPlus, Plus, X } from "lucide-react";
 import { api } from "../api/client";
-import type { IntervalRep, Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
+import type { Gear, IntervalRep, Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
 import { toast } from "../lib/toast";
 import { Button, Field, Modal } from "./ui";
 import {
@@ -57,6 +57,8 @@ export function LogWorkoutModal({
   onPresetsChanged,
   onClose,
   onSaved,
+  gear = [],
+  defaultGear,
 }: {
   workout: Workout | null;
   exerciseNames: string[];
@@ -64,6 +66,10 @@ export function LogWorkoutModal({
   onPresetsChanged: () => void;
   onClose: () => void;
   onSaved: (saved: Workout) => void;
+  /** All your kit; the form offers what's in use for the kind. */
+  gear?: Gear[];
+  /** What to pick for a new workout of a kind — usually what you used last time. */
+  defaultGear?: (kind: WorkoutKind) => string | null;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const [kind, setKind] = useState<WorkoutKind>(workout?.kind ?? "strength");
@@ -84,6 +90,9 @@ export function LogWorkoutModal({
   const [quickCount, setQuickCount] = useState("6");
   const [quickDistance, setQuickDistance] = useState("800");
   const [notes, setNotes] = useState(workout?.notes ?? "");
+  const [gearId, setGearId] = useState<string | null>(() =>
+    workout ? workout.gearId : (defaultGear?.("strength") ?? null)
+  );
   const [blocks, setBlocks] = useState<ExerciseBlock[]>(() => toBlocks(workout));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -93,6 +102,12 @@ export function LogWorkoutModal({
   const [presetOpen, setPresetOpen] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [presetSaving, setPresetSaving] = useState(false);
+
+  // A new workout picks up the kit you last used for its kind; an edit keeps its own.
+  useEffect(() => {
+    if (!workout) setGearId(defaultGear?.(kind) ?? null);
+  }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  const kitOptions = gear.filter((g) => (!g.retiredAt && g.kinds.includes(kind)) || g.id === workout?.gearId);
 
   const info = kindInfo(kind);
   const cardio = isCardio(kind);
@@ -211,6 +226,7 @@ export function LogWorkoutModal({
       sets,
       intervals,
       recoverySec,
+      gearId: kitOptions.some((g) => g.id === gearId) ? gearId : null,
     };
   };
 
@@ -408,9 +424,24 @@ export function LogWorkoutModal({
           </div>
         </div>
 
-        <Field label="Name (optional)">
-          <input className="w-full" placeholder={info.placeholder} value={title} onChange={(e) => setTitle(e.target.value)} />
-        </Field>
+        <div className={kitOptions.length > 0 ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : ""}>
+          <Field label="Name (optional)">
+            <input className="w-full" placeholder={info.placeholder} value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          {kitOptions.length > 0 && (
+            <Field label="Kit">
+              <select className="w-full" value={gearId ?? ""} onChange={(e) => setGearId(e.target.value || null)}>
+                <option value="">None</option>
+                {kitOptions.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                    {g.retiredAt ? " (retired)" : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+        </div>
 
         {kind === "run" && (
           <div className="flex gap-1" role="radiogroup" aria-label="Kind of run">

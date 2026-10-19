@@ -249,6 +249,31 @@ export interface Workout {
   sets: WorkoutSet[];
   intervals: IntervalRep[]; // empty unless it's an interval run
   recoverySec: number | null; // between reps
+  gearId: string | null; // the kit used
+}
+
+/**
+ * Kit that workouts are logged with — running shoes, a bike. It can link to
+ * the transaction that bought it; `price` is what it cost, in the main currency.
+ */
+export interface Gear {
+  id: string;
+  name: string;
+  kinds: WorkoutKind[]; // what it's used for
+  transactionId: string | null;
+  transaction: {
+    id: string;
+    date: string;
+    amount: number;
+    description: string;
+    account: { name: string; currency: string };
+  } | null;
+  price: number | null;
+  boughtOn: string | null;
+  startKm: number; // already on it when added
+  lifespanKm: number | null; // when to think about replacing it
+  retiredAt: string | null;
+  createdAt: string;
 }
 
 export interface BodyWeight {

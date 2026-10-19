@@ -6,6 +6,7 @@ import {
   ChartCandlestick,
   ChartPie,
   ChevronDown,
+  Coins,
   Dumbbell,
   Flag,
   LayoutDashboard,
@@ -50,6 +51,7 @@ type Tab =
   | "cardio"
   | "weight"
   | "fitnessGoals"
+  | "kit"
   | "settings";
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
@@ -66,6 +68,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "cardio", label: "Cardio", icon: Route },
   { id: "weight", label: "Body weight", icon: Scale },
   { id: "fitnessGoals", label: "Goals", icon: Flag },
+  { id: "kit", label: "Kit & costs", icon: Coins },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -75,7 +78,7 @@ const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
     label: "Money",
     tabs: ["dashboard", "transactions", "analytics", "budgets", "goals", "investments", "forecast", "tax"],
   },
-  { label: "Health", tabs: ["fitness", "strength", "cardio", "weight", "fitnessGoals"] },
+  { label: "Health", tabs: ["fitness", "strength", "cardio", "weight", "fitnessGoals", "kit"] },
   { tabs: ["settings"] },
 ];
 
@@ -86,6 +89,7 @@ const FITNESS_VIEWS: Partial<Record<Tab, FitnessView>> = {
   cardio: "cardio",
   weight: "weight",
   fitnessGoals: "goals",
+  kit: "kit",
 };
 const tabForView = (v: FitnessView) =>
   (Object.keys(FITNESS_VIEWS) as Tab[]).find((t) => FITNESS_VIEWS[t] === v) ?? "fitness";

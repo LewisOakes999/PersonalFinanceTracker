@@ -31,6 +31,7 @@ backupRouter.get(
       bodyWeights,
       workoutPresets,
       fitnessGoals,
+      gear,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
       prisma.category.findMany({ where: { userId } }),
@@ -52,6 +53,7 @@ backupRouter.get(
       prisma.bodyWeight.findMany({ where: { userId } }),
       prisma.workoutPreset.findMany({ where: { userId } }),
       prisma.fitnessGoal.findMany({ where: { userId } }),
+      prisma.gear.findMany({ where: { userId } }),
     ]);
 
     res.json({
@@ -77,6 +79,7 @@ backupRouter.get(
       bodyWeights,
       workoutPresets,
       fitnessGoals,
+      gear,
     });
   })
 );
@@ -151,9 +154,21 @@ backupRouter.post(
 
     // Fitness data — only replaced when the backup has it, so restoring a
     // backup made before fitness tracking existed doesn't wipe your workouts.
+    // Kit goes first, since workouts point at it; it can only keep a link to
+    // a purchase that was just restored for this user.
+    if (Array.isArray(data.gear)) {
+      await prisma.gear.deleteMany({ where: { userId } });
+      const txnIds = new Set(plain(data.transactions).map((t) => t?.id));
+      await prisma.gear.createMany({
+        data: withUser(data.gear).map((g) => ({ ...g, transactionId: txnIds.has(g.transactionId) ? g.transactionId : null })),
+      });
+    }
     if (Array.isArray(data.workouts)) {
       await prisma.workout.deleteMany({ where: { userId } }); // sets cascade
-      const workouts = withUser(data.workouts);
+      const gearIds = new Set(
+        (await prisma.gear.findMany({ where: { userId }, select: { id: true } })).map((g) => g.id)
+      );
+      const workouts = withUser(data.workouts).map((w) => ({ ...w, gearId: gearIds.has(w.gearId) ? w.gearId : null }));
       await prisma.workout.createMany({ data: workouts });
       // Only attach sets to workouts that were just restored for this user.
       const ids = new Set(workouts.map((w) => w.id));
