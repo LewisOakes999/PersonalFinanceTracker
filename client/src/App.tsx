@@ -68,8 +68,10 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
 
 // The sidebar groups pages by area of life; unlabelled groups sit apart.
 const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
-  { tabs: ["dashboard"] },
-  { label: "Money", tabs: ["transactions", "analytics", "budgets", "goals", "investments", "forecast", "tax"] },
+  {
+    label: "Money",
+    tabs: ["dashboard", "transactions", "analytics", "budgets", "goals", "investments", "forecast", "tax"],
+  },
   { label: "Health", tabs: ["fitness", "strength", "cardio", "weight"] },
   { tabs: ["settings"] },
 ];
