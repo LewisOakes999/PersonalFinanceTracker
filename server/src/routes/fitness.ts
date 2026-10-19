@@ -10,7 +10,7 @@ import { getConversion } from "../lib/currency.js";
 
 export const fitnessRouter = Router();
 
-export const WORKOUT_KINDS = ["strength", "run", "cycle", "swim", "walk", "class", "sport", "other"] as const;
+export const WORKOUT_KINDS = ["strength", "run", "cycle", "swim", "walk", "hybrid", "class", "sport", "other"] as const;
 type Kind = (typeof WORKOUT_KINDS)[number];
 // Only these record a distance; only strength records sets.
 const DISTANCE_KINDS = new Set<Kind>(["run", "cycle", "swim", "walk"]);
@@ -45,6 +45,41 @@ const intervalsInput = z
   .default([]);
 const recoveryInput = z.number().int().min(1).max(60 * 60).nullable().optional();
 
+// A hybrid session's segments, in order: runs (a distance, a time, or both)
+// and stations — an exercise with reps, a weight, a distance and/or a time,
+// like 100 wall balls at 6 kg or a 50 m sled push.
+const metres = z.number().int().min(1).max(100_000).nullable();
+const seconds = z.number().int().min(1).max(24 * 60 * 60).nullable();
+const segmentsInput = z
+  .array(
+    z.discriminatedUnion("type", [
+      z.object({ type: z.literal("run"), distanceM: metres, durationSec: seconds }),
+      z.object({
+        type: z.literal("station"),
+        exercise: z.string().trim().min(1).max(60),
+        reps: z.number().int().min(1).max(10_000).nullable(),
+        weightKg: z.number().min(0).max(1000).nullable(),
+        distanceM: metres,
+        durationSec: seconds,
+      }),
+    ])
+  )
+  .max(100)
+  .default([])
+  .superRefine((segs, ctx) =>
+    segs.forEach((seg, i) => {
+      const measured =
+        seg.distanceM !== null || seg.durationSec !== null || (seg.type === "station" && seg.reps !== null);
+      if (!measured) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i],
+          message: seg.type === "run" ? "Each run needs a distance or a time." : "Each station needs reps, a distance or a time.",
+        });
+      }
+    })
+  );
+
 const workoutInput = z.object({
   date: z.coerce.date(),
   kind: z.enum(WORKOUT_KINDS),
@@ -55,6 +90,7 @@ const workoutInput = z.object({
   sets: setsInput,
   intervals: intervalsInput,
   recoverySec: recoveryInput,
+  segments: segmentsInput,
   gearId: z.string().min(1).nullable().optional(),
 });
 type WorkoutInput = z.infer<typeof workoutInput>;
@@ -69,6 +105,9 @@ function normalise(data: WorkoutInput) {
   if (strength && data.sets.length === 0) {
     throw new HttpError(400, "Add at least one exercise with a set.");
   }
+  if (data.kind === "hybrid" && data.segments.length === 0) {
+    throw new HttpError(400, "Add at least one run or station.");
+  }
   return {
     date: data.date,
     kind: data.kind,
@@ -78,6 +117,7 @@ function normalise(data: WorkoutInput) {
     notes: data.notes || null,
     sets: strength ? data.sets : [],
     ...intervalFields(data),
+    segments: data.kind === "hybrid" ? data.segments : [],
     gearId: data.gearId ?? null,
   };
 }
@@ -259,6 +299,7 @@ const presetInput = z.object({
   sets: setsInput,
   intervals: intervalsInput,
   recoverySec: recoveryInput,
+  segments: segmentsInput,
 });
 
 type PresetRow = Prisma.WorkoutPresetGetPayload<object>;
@@ -287,6 +328,9 @@ fitnessRouter.post(
     if (strength && data.sets.length === 0) {
       throw new HttpError(400, "Add at least one exercise with a set before saving it as a preset.");
     }
+    if (data.kind === "hybrid" && data.segments.length === 0) {
+      throw new HttpError(400, "Add at least one run or station before saving it as a preset.");
+    }
     const fields = {
       kind: data.kind,
       title: data.title,
@@ -294,6 +338,7 @@ fitnessRouter.post(
       distanceKm: DISTANCE_KINDS.has(data.kind) ? (data.distanceKm ?? null) : null,
       sets: strength ? data.sets : [],
       ...intervalFields(data),
+      segments: data.kind === "hybrid" ? data.segments : [],
     };
     const preset = await prisma.workoutPreset.upsert({
       where: { userId_name: { userId, name: data.name } },

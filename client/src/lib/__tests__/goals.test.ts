@@ -20,6 +20,7 @@ const workout = (date: string, kind: WorkoutKind, extra: Partial<Workout> = {}):
   sets: [],
   intervals: [],
   recoverySec: null,
+  segments: [],
   gearId: null,
   ...extra,
 });

@@ -1,8 +1,8 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { BookmarkPlus, Plus, X } from "lucide-react";
+import { BookmarkPlus, Dumbbell, Footprints, Plus, X } from "lucide-react";
 import { api } from "../api/client";
-import type { Gear, IntervalRep, Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
+import type { Gear, HybridSegment, IntervalRep, Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
 import { toast } from "../lib/toast";
 import { Button, Field, Modal } from "./ui";
 import {
@@ -10,6 +10,8 @@ import {
   formatClock,
   formatPace,
   formatVolume,
+  HYROX,
+  hybridSummary,
   intervalStats,
   intervalStructure,
   isCardio,
@@ -20,11 +22,27 @@ import {
   type DurationParts,
 } from "../lib/fitness";
 import { KIND_ICONS } from "../lib/fitnessIcons";
+import { suits } from "../lib/kit";
 
 type SetRow = { reps: string; weight: string };
 type ExerciseBlock = { id: number; name: string; sets: SetRow[] };
 
 type RepRow = { id: number; distance: string; m: string; s: string };
+
+/** A hybrid session's run or station as typed. */
+type SegRow = {
+  id: number;
+  type: "run" | "station";
+  name: string;
+  distance: string;
+  reps: string;
+  weight: string;
+  m: string;
+  s: string;
+};
+
+/** Kinds timed to the second: cardio for its pace, hybrid for its finish time. */
+const timedKind = (k: WorkoutKind) => isCardio(k) || k === "hybrid";
 
 let nextId = 1;
 const repRow = (distance = "", sec: number | null = null): RepRow => ({
@@ -36,6 +54,25 @@ const repRow = (distance = "", sec: number | null = null): RepRow => ({
 const toRepRows = (intervals: IntervalRep[]) =>
   intervals.map((r) => repRow(r.distanceM ? String(r.distanceM) : "", r.durationSec));
 const emptyBlock = (): ExerciseBlock => ({ id: nextId++, name: "", sets: [{ reps: "", weight: "" }] });
+
+const segRow = (seg: HybridSegment | { type: "run" | "station" }): SegRow => {
+  const x = seg as Partial<Extract<HybridSegment, { type: "station" }>> & { type: "run" | "station" };
+  const sec = x.durationSec ?? null;
+  return {
+    id: nextId++,
+    type: seg.type,
+    name: x.exercise ?? "",
+    distance: x.distanceM ? String(x.distanceM) : "",
+    reps: x.reps ? String(x.reps) : "",
+    weight: x.weightKg ? String(x.weightKg) : "",
+    m: sec ? String(Math.floor(sec / 60)) : "",
+    s: sec ? String(sec % 60) : "",
+  };
+};
+/** Stored segments back into rows; a new session starts with a run and a station to fill in. */
+const toSegRows = (segments: HybridSegment[]) =>
+  segments.length > 0 ? segments.map(segRow) : [segRow({ type: "run" }), segRow({ type: "station" })];
+const segBlank = (r: SegRow) => ![r.name, r.distance, r.reps, r.weight, r.m, r.s].some((v) => v.trim());
 
 /** An exercise's volume (reps × kg) and reps as typed so far, skipping unreadable sets. */
 function blockVolume(b: ExerciseBlock) {
@@ -90,7 +127,7 @@ export function LogWorkoutModal({
   const [kind, setKind] = useState<WorkoutKind>(workout?.kind ?? "strength");
   const [date, setDate] = useState(workout ? workout.date.slice(0, 10) : today);
   const [dur, setDur] = useState<DurationParts>(() =>
-    splitDuration(workout?.durationSec ?? null, isCardio(workout?.kind ?? "strength"))
+    splitDuration(workout?.durationSec ?? null, timedKind(workout?.kind ?? "strength"))
   );
   const [title, setTitle] = useState(workout?.title ?? "");
   const [distance, setDistance] = useState(workout?.distanceKm ? String(workout.distanceKm) : "");
@@ -102,6 +139,7 @@ export function LogWorkoutModal({
   const [recovery, setRecovery] = useState<DurationParts>(() =>
     splitDuration(workout?.recoverySec ?? null, true)
   );
+  const [segs, setSegs] = useState<SegRow[]>(() => toSegRows(workout?.segments ?? []));
   const [quickCount, setQuickCount] = useState("6");
   const [quickDistance, setQuickDistance] = useState("800");
   const [notes, setNotes] = useState(workout?.notes ?? "");
@@ -122,12 +160,12 @@ export function LogWorkoutModal({
   useEffect(() => {
     if (!workout) setGearId(defaultGear?.(kind) ?? null);
   }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
-  const kitOptions = gear.filter((g) => (!g.retiredAt && g.kinds.includes(kind)) || g.id === workout?.gearId);
+  const kitOptions = gear.filter((g) => (!g.retiredAt && suits(g, kind)) || g.id === workout?.gearId);
 
   const info = kindInfo(kind);
-  const cardio = isCardio(kind);
-  // Only runs, rides, swims and walks have a seconds box — their pace needs it.
-  const seconds = joinDuration({ ...dur, s: cardio ? dur.s : "" });
+  // Runs, rides, swims, walks and hybrid sessions have a seconds box — their pace or finish time needs it.
+  const timed = timedKind(kind);
+  const seconds = joinDuration({ ...dur, s: timed ? dur.s : "" });
   const durationLabelId = useId();
   const km = distance.trim() === "" ? null : Number(distance);
   const intervalMode = kind === "run" && runMode === "intervals";
@@ -162,7 +200,7 @@ export function LogWorkoutModal({
   const collect = () => {
     setError("");
     if (seconds !== null && Number.isNaN(seconds)) {
-      setError("Enter the duration as whole hours and minutes" + (cardio ? " (and seconds)." : "."));
+      setError("Enter the duration as whole hours and minutes" + (timed ? " (and seconds)." : "."));
       return null;
     }
     if (seconds !== null && seconds > 24 * 60 * 60) {
@@ -209,6 +247,58 @@ export function LogWorkoutModal({
       setError("Enter the distance in km.");
       return null;
     }
+    // Hybrid: each run and station in order; untouched rows are skipped.
+    const segments: HybridSegment[] = [];
+    if (kind === "hybrid") {
+      let runs = 0;
+      let stations = 0;
+      for (const r of segs) {
+        if (segBlank(r)) continue;
+        const label = r.type === "run" ? `Run ${++runs}` : r.name.trim() || `Station ${++stations}`;
+        const distanceM = r.distance.trim() === "" ? null : Number(r.distance);
+        if (distanceM !== null && (!Number.isInteger(distanceM) || distanceM < 1)) {
+          setError(`${label}: enter the distance in whole metres.`);
+          return null;
+        }
+        const durationSec = joinDuration({ h: "", m: r.m, s: r.s });
+        if (durationSec !== null && Number.isNaN(durationSec)) {
+          setError(`${label}: enter the time as minutes and seconds.`);
+          return null;
+        }
+        if (r.type === "run") {
+          if (distanceM === null && durationSec === null) {
+            setError(`${label}: add a distance or a time.`);
+            return null;
+          }
+          segments.push({ type: "run", distanceM, durationSec });
+          continue;
+        }
+        if (!r.name.trim()) {
+          setError("Give every station a name, like Wall Balls.");
+          return null;
+        }
+        const reps = r.reps.trim() === "" ? null : Number(r.reps);
+        if (reps !== null && (!Number.isInteger(reps) || reps < 1)) {
+          setError(`${label}: enter the reps as a whole number.`);
+          return null;
+        }
+        const weightKg = r.weight.trim() === "" ? null : Number(r.weight);
+        if (weightKg !== null && (!Number.isFinite(weightKg) || weightKg < 0)) {
+          setError(`${label}: check the weight.`);
+          return null;
+        }
+        if (reps === null && distanceM === null && durationSec === null) {
+          setError(`${label}: add reps, a distance or a time.`);
+          return null;
+        }
+        segments.push({ type: "station", exercise: canonical(r.name), reps, weightKg, distanceM, durationSec });
+      }
+      if (segments.length === 0) {
+        setError("Add at least one run or station.");
+        return null;
+      }
+    }
+
     let intervals: IntervalRep[] = [];
     let recoverySec: number | null = null;
     if (intervalMode) {
@@ -241,6 +331,7 @@ export function LogWorkoutModal({
       sets,
       intervals,
       recoverySec,
+      segments,
       gearId: kitOptions.some((g) => g.id === gearId) ? gearId : null,
     };
   };
@@ -268,12 +359,13 @@ export function LogWorkoutModal({
   const applyPreset = (p: WorkoutPreset) => {
     setKind(p.kind);
     setTitle(p.title);
-    setDur(splitDuration(p.durationSec, isCardio(p.kind)));
+    setDur(splitDuration(p.durationSec, timedKind(p.kind)));
     setDistance(p.distanceKm ? String(p.distanceKm) : "");
     setBlocks(toBlocks(p));
     setRunMode(p.intervals.length > 0 ? "intervals" : "steady");
     setReps(toRepRows(p.intervals));
     setRecovery(splitDuration(p.recoverySec, true));
+    setSegs(toSegRows(p.segments ?? []));
     setApplied(p.id);
     setError("");
   };
@@ -379,7 +471,7 @@ export function LogWorkoutModal({
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Kind of workout">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5" role="radiogroup" aria-label="Kind of workout">
           {KINDS.map((k) => {
             const Icon = KIND_ICONS[k.id];
             const on = kind === k.id;
@@ -422,11 +514,11 @@ export function LogWorkoutModal({
               <DurationBox
                 label="Minutes"
                 unit="m"
-                placeholder={cardio ? "25" : "45"}
+                placeholder={timed ? "25" : "45"}
                 value={dur.m}
                 onChange={(m) => setDur((d) => ({ ...d, m }))}
               />
-              {cardio && (
+              {timed && (
                 <DurationBox
                   label="Seconds"
                   unit="s"
@@ -478,6 +570,8 @@ export function LogWorkoutModal({
             ))}
           </div>
         )}
+
+        {kind === "hybrid" && <HybridEditor rows={segs} setRows={setSegs} exerciseNames={exerciseNames} />}
 
         {intervalMode && (
           <IntervalsEditor
@@ -877,6 +971,228 @@ function IntervalsEditor({
             <>
               {" "}
               · fastest rep {stats.fastest! + 1} (<span className="num">{formatClock(fastest.durationSec)}</span>)
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A hybrid session's runs and stations, in order — a Hyrox, or your own mix. */
+function HybridEditor({
+  rows,
+  setRows,
+  exerciseNames,
+}: {
+  rows: SegRow[];
+  setRows: (update: (rows: SegRow[]) => SegRow[]) => void;
+  exerciseNames: string[];
+}) {
+  const update = (id: number, change: Partial<SegRow>) =>
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...change } : r)));
+  const add = (type: "run" | "station") =>
+    setRows((rs) => {
+      // A new run repeats the last run's distance; a new station starts empty.
+      const lastRun = [...rs].reverse().find((r) => r.type === "run");
+      const row = segRow({ type });
+      return [...rs, type === "run" && lastRun ? { ...row, distance: lastRun.distance } : row];
+    });
+  // The last run and the station after it, again — most sessions repeat the pattern.
+  const lastPair = (() => {
+    for (let i = rows.length - 1; i > 0; i--) {
+      if (rows[i].type === "station" && rows[i - 1].type === "run") return [rows[i - 1], rows[i]];
+    }
+    return null;
+  })();
+  const repeatPair = () =>
+    lastPair &&
+    setRows((rs) => [
+      ...rs,
+      { ...lastPair[0], id: nextId++, m: "", s: "" },
+      { ...lastPair[1], id: nextId++, m: "", s: "" },
+    ]);
+  const fillHyrox = () => {
+    if (rows.some((r) => !segBlank(r)) && !confirm("Replace what you've entered with the Hyrox runs and stations?")) return;
+    setRows(() => HYROX.map(segRow));
+  };
+  const names = [...new Set([...HYROX.flatMap((x) => (x.type === "station" ? [x.exercise] : [])), ...exerciseNames])];
+
+  // What's been typed so far, read leniently for the running summary.
+  const num = (v: string) => (v.trim() === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  const typed: HybridSegment[] = rows
+    .filter((r) => !segBlank(r))
+    .map((r) => {
+      const sec = joinDuration({ h: "", m: r.m, s: r.s });
+      const durationSec = sec !== null && !Number.isNaN(sec) ? sec : null;
+      return r.type === "run"
+        ? { type: "run", distanceM: num(r.distance), durationSec }
+        : { type: "station", exercise: r.name, reps: num(r.reps), weightKg: num(r.weight), distanceM: num(r.distance), durationSec };
+    });
+  const h = hybridSummary(typed);
+
+  let runNo = 0;
+  return (
+    <div className="glass-nested space-y-3 rounded-xl p-3">
+      <datalist id="hybrid-stations">
+        {names.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-glass-3 text-xs uppercase tracking-wider">Runs and stations, in order</span>
+        <button type="button" onClick={fillHyrox} className="text-[color:var(--accent-soft)] text-xs hover:underline">
+          Fill in a Hyrox
+        </button>
+      </div>
+
+      <ol className="space-y-2">
+        {rows.map((r) => {
+          const n = r.type === "run" ? ++runNo : 0;
+          const remove = (
+            <button
+              type="button"
+              onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+              className="text-glass-3 hover:text-[#ff6b8a] shrink-0 p-1"
+              aria-label={`Remove ${r.type === "run" ? `run ${n}` : r.name || "station"}`}
+            >
+              <X size={13} />
+            </button>
+          );
+          return r.type === "run" ? (
+            <li key={r.id} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-glass-3 inline-flex w-16 shrink-0 items-center gap-1 text-xs">
+                <Footprints size={13} strokeWidth={1.75} className="text-[color:var(--accent-soft)]" /> Run {n}
+              </span>
+              <span className="flex w-24 shrink-0 items-center gap-1">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  aria-label={`Run ${n} distance in metres`}
+                  className="num w-full min-w-0 px-2 text-center"
+                  // Not "1000": an example that looks filled in would leave runs without a distance.
+                  placeholder="dist."
+                  value={r.distance}
+                  onChange={(e) => update(r.id, { distance: e.target.value })}
+                />
+                <span className="text-glass-3 text-xs">m</span>
+              </span>
+              {/* On a narrow screen the time wraps onto its own line rather than squashing. */}
+              <span className="flex min-w-[10rem] flex-1 items-center gap-2">
+                <span className="text-glass-3 shrink-0 text-xs">time</span>
+                <DurationBox label={`Run ${n} minutes`} unit="m" placeholder="0" value={r.m} onChange={(m) => update(r.id, { m })} />
+                <DurationBox label={`Run ${n} seconds`} unit="s" placeholder="00" value={r.s} onChange={(v) => update(r.id, { s: v })} />
+                {remove}
+              </span>
+            </li>
+          ) : (
+            <li key={r.id} className="rounded-lg border border-white/10 p-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Dumbbell size={13} strokeWidth={1.75} className="text-glass-3 shrink-0" />
+                <input
+                  className="w-full min-w-0"
+                  list="hybrid-stations"
+                  placeholder="Station, e.g. Wall Balls"
+                  aria-label="Station"
+                  value={r.name}
+                  onChange={(e) => update(r.id, { name: e.target.value })}
+                />
+                {remove}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 pl-5">
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    aria-label={`${r.name || "Station"} reps`}
+                    className="num w-16 px-2 text-center"
+                    placeholder="reps"
+                    value={r.reps}
+                    onChange={(e) => update(r.id, { reps: e.target.value })}
+                  />
+                  <span className="text-glass-3">×</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    inputMode="decimal"
+                    aria-label={`${r.name || "Station"} weight in kg`}
+                    className="num w-16 px-2 text-center"
+                    placeholder="kg"
+                    value={r.weight}
+                    onChange={(e) => update(r.id, { weight: e.target.value })}
+                  />
+                </span>
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    aria-label={`${r.name || "Station"} distance in metres`}
+                    className="num w-20 px-2 text-center"
+                    placeholder="m"
+                    value={r.distance}
+                    onChange={(e) => update(r.id, { distance: e.target.value })}
+                  />
+                  <span className="text-glass-3 text-xs">m</span>
+                </span>
+                <span className="flex w-40 items-center gap-2">
+                  <span className="text-glass-3 text-xs">time</span>
+                  <DurationBox label={`${r.name || "Station"} minutes`} unit="m" placeholder="0" value={r.m} onChange={(m) => update(r.id, { m })} />
+                  <DurationBox label={`${r.name || "Station"} seconds`} unit="s" placeholder="00" value={r.s} onChange={(v) => update(r.id, { s: v })} />
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <button type="button" onClick={() => add("run")} className="text-[color:var(--accent-soft)] hover:underline">
+          + Run
+        </button>
+        <button type="button" onClick={() => add("station")} className="text-[color:var(--accent-soft)] hover:underline">
+          + Station
+        </button>
+        {lastPair && (
+          <button type="button" onClick={repeatPair} className="text-[color:var(--accent-soft)] hover:underline">
+            + Repeat the last run and station
+          </button>
+        )}
+      </div>
+
+      {(h.runs > 0 || h.stations > 0) && (
+        <p className="text-glass-3 border-t border-white/10 pt-2 text-xs">
+          {h.runs > 0 && (
+            <>
+              <span className="text-glass">
+                {h.runs} run{h.runs === 1 ? "" : "s"}
+              </span>
+              {h.runKm > 0 && ` · ${parseFloat(h.runKm.toFixed(2))} km`}
+              {h.runPace !== null && (
+                <>
+                  {" "}
+                  · avg <span className="num text-glass">{formatPace("run", h.runPace)}</span>
+                </>
+              )}
+            </>
+          )}
+          {h.runs > 0 && h.stations > 0 && " · "}
+          {h.stations > 0 && (
+            <span className="text-glass">
+              {h.stations} station{h.stations === 1 ? "" : "s"}
+            </span>
+          )}
+          {h.volume > 0 && ` · ${formatVolume(h.volume)} volume`}
+          {h.splitsSec !== null && (
+            <>
+              {" "}
+              · splits add up to <span className="num text-glass">{formatClock(h.splitsSec)}</span>
             </>
           )}
         </p>

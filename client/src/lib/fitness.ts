@@ -1,11 +1,11 @@
-import type { BodyWeight, IntervalRep, Workout, WorkoutKind, WorkoutSet } from "../types";
+import type { BodyWeight, HybridSegment, IntervalRep, Workout, WorkoutKind, WorkoutSet } from "../types";
 
 // Everything here is pure, so the progress maths can be tested on its own.
 // Dates are calendar days stored as midnight UTC, so all date maths is UTC.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type KindGroup = "strength" | "cardio" | "session";
+export type KindGroup = "strength" | "cardio" | "hybrid" | "session";
 
 export const KINDS: { id: WorkoutKind; label: string; group: KindGroup; placeholder: string }[] = [
   { id: "strength", label: "Strength", group: "strength", placeholder: "e.g. Push day" },
@@ -13,6 +13,7 @@ export const KINDS: { id: WorkoutKind; label: string; group: KindGroup; placehol
   { id: "cycle", label: "Cycle", group: "cardio", placeholder: "e.g. Commute" },
   { id: "swim", label: "Swim", group: "cardio", placeholder: "e.g. Lunchtime lengths" },
   { id: "walk", label: "Walk", group: "cardio", placeholder: "e.g. Hike" },
+  { id: "hybrid", label: "Hybrid", group: "hybrid", placeholder: "e.g. Hyrox sim" },
   { id: "class", label: "Class", group: "session", placeholder: "e.g. Yoga, HIIT, Spin" },
   { id: "sport", label: "Sport", group: "session", placeholder: "e.g. Football, Padel" },
   { id: "other", label: "Other", group: "session", placeholder: "What did you do?" },
@@ -154,7 +155,10 @@ export function streak(summary: WeekSummary[], goal: number): number {
 export const setsVolume = (sets: Pick<WorkoutSet, "reps" | "weightKg">[]) =>
   sets.reduce((s, x) => s + x.reps * x.weightKg, 0);
 
-export const workoutVolume = (w: Pick<Workout, "sets">) => setsVolume(w.sets);
+/** A workout's volume: its sets, plus any hybrid stations done for reps with a weight. */
+export const workoutVolume = (w: Pick<Workout, "sets"> & { segments?: HybridSegment[] }) =>
+  setsVolume(w.sets) +
+  (w.segments ?? []).reduce((s, x) => s + (x.type === "station" ? (x.reps ?? 0) * (x.weightKg ?? 0) : 0), 0);
 
 export interface ExerciseVolume {
   name: string;
@@ -329,10 +333,15 @@ export function cardioBests(sessions: CardioSession[], kind: WorkoutKind) {
 export const isIntervalRun = (w: { kind: WorkoutKind; intervals?: IntervalRep[] }) =>
   w.kind === "run" && (w.intervals?.length ?? 0) > 0;
 
-/** Distance covered: the total if one was entered, otherwise the reps added up. */
-export function effectiveKm(w: Pick<Workout, "distanceKm" | "intervals">): number | null {
+/**
+ * Distance covered: the total if one was entered, otherwise an interval run's
+ * reps or a hybrid session's runs added up (its stations aren't running).
+ */
+export function effectiveKm(w: Pick<Workout, "distanceKm" | "intervals"> & { segments?: HybridSegment[] }): number | null {
   if (w.distanceKm) return w.distanceKm;
-  const metres = (w.intervals ?? []).reduce((s, r) => s + (r.distanceM ?? 0), 0);
+  const metres =
+    (w.intervals ?? []).reduce((s, r) => s + (r.distanceM ?? 0), 0) +
+    (w.segments ?? []).reduce((s, x) => s + (x.type === "run" ? (x.distanceM ?? 0) : 0), 0);
   return metres > 0 ? metres / 1000 : null;
 }
 
@@ -457,6 +466,115 @@ export function repBests(workouts: Workout[]) {
   return [...best.entries()].sort((a, b) => a[0] - b[0]).map(([distanceM, b]) => ({ distanceM, ...b }));
 }
 
+// ── Hybrid sessions ────────────────────────────────────────────────────────
+
+/** A Hyrox: eight 1 km runs, each followed by a station. Weights depend on the division. */
+export const HYROX: HybridSegment[] = (
+  [
+    ["SkiErg", { distanceM: 1000 }],
+    ["Sled Push", { distanceM: 50 }],
+    ["Sled Pull", { distanceM: 50 }],
+    ["Burpee Broad Jumps", { distanceM: 80 }],
+    ["Rowing", { distanceM: 1000 }],
+    ["Farmers Carry", { distanceM: 200 }],
+    ["Sandbag Lunges", { distanceM: 100 }],
+    ["Wall Balls", { reps: 100 }],
+  ] as const
+).flatMap(([exercise, m]): HybridSegment[] => [
+  { type: "run", distanceM: 1000, durationSec: null },
+  {
+    type: "station",
+    exercise,
+    reps: "reps" in m ? m.reps : null,
+    weightKg: null,
+    distanceM: "distanceM" in m ? m.distanceM : null,
+    durationSec: null,
+  },
+]);
+
+export interface HybridSummary {
+  runs: number;
+  runKm: number;
+  runPace: number | null; // s/km over the runs with a distance and a time
+  stations: number;
+  volume: number; // stations' reps × weight
+  splitsSec: number | null; // every segment's time added up, when all were timed
+}
+
+export function hybridSummary(segments: HybridSegment[]): HybridSummary {
+  const runs = segments.filter((x) => x.type === "run");
+  const timed = runs.filter((r) => r.distanceM && r.durationSec);
+  const timedKm = timed.reduce((s, r) => s + r.distanceM! / 1000, 0);
+  const allTimed = segments.length > 0 && segments.every((x) => x.durationSec);
+  return {
+    runs: runs.length,
+    runKm: runs.reduce((s, r) => s + (r.distanceM ?? 0), 0) / 1000,
+    runPace: timedKm > 0 ? timed.reduce((s, r) => s + r.durationSec!, 0) / timedKm : null,
+    stations: segments.length - runs.length,
+    volume: workoutVolume({ sets: [], segments }),
+    splitsSec: allTimed ? segments.reduce((s, x) => s + x.durationSec!, 0) : null,
+  };
+}
+
+/** A session's shape — its runs and stations in order — so like is compared with like. */
+export const hybridKey = (segments: HybridSegment[]) =>
+  segments
+    .map((x) =>
+      x.type === "run"
+        ? `run:${x.distanceM ?? ""}`
+        : `${x.exercise.trim().toLowerCase()}:${x.reps ?? ""}:${x.distanceM ?? ""}`
+    )
+    .join(",");
+const HYROX_KEY = hybridKey(HYROX);
+
+/** "Hyrox" for the race format, otherwise "4 runs + 4 stations". */
+export function hybridName(segments: HybridSegment[]): string {
+  if (hybridKey(segments) === HYROX_KEY) return "Hyrox";
+  const runs = segments.filter((x) => x.type === "run").length;
+  const stations = segments.length - runs;
+  const part = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  return [runs && part(runs, "run"), stations && part(stations, "station")].filter(Boolean).join(" + ");
+}
+
+export interface HybridSession {
+  workoutId: string;
+  date: string;
+  title: string;
+  segments: HybridSegment[];
+  summary: HybridSummary;
+  totalSec: number | null; // the time logged, or failing that the splits added up
+  key: string;
+  name: string;
+  pb: boolean; // quicker than every earlier session of the same shape
+}
+
+/** Hybrid sessions, oldest first, each flagged if it beat earlier ones of the same shape. */
+export function hybridSessions(workouts: Workout[]): HybridSession[] {
+  const best = new Map<string, number>();
+  return workouts
+    .filter((w) => w.kind === "hybrid" && (w.segments ?? []).length > 0)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((w) => {
+      const summary = hybridSummary(w.segments);
+      const totalSec = w.durationSec ?? summary.splitsSec;
+      const key = hybridKey(w.segments);
+      const prev = best.get(key);
+      const pb = totalSec !== null && prev !== undefined && totalSec < prev;
+      if (totalSec !== null && (prev === undefined || totalSec < prev)) best.set(key, totalSec);
+      return {
+        workoutId: w.id,
+        date: w.date,
+        title: w.title,
+        segments: w.segments,
+        summary,
+        totalSec,
+        key,
+        name: hybridName(w.segments),
+        pb,
+      };
+    });
+}
+
 // ── Body weight ────────────────────────────────────────────────────────────
 
 type Measure = (p: BodyWeight) => number | null | undefined;
@@ -509,6 +627,12 @@ export function workoutSummary(w: Workout): string {
     const volume = workoutVolume(w);
     if (volume > 0) parts.push(`${formatVolume(volume)} volume`);
     if (w.durationSec) parts.push(formatMinutes(w.durationSec));
+  } else if (w.kind === "hybrid") {
+    const h = hybridSummary(w.segments ?? []);
+    if (h.runs) parts.push(`${h.runs} run${h.runs === 1 ? "" : "s"}${h.runKm ? ` (${parseFloat(h.runKm.toFixed(2))} km)` : ""}`);
+    if (h.stations) parts.push(`${h.stations} station${h.stations === 1 ? "" : "s"}`);
+    if (w.durationSec) parts.push(formatClock(w.durationSec));
+    if (h.volume > 0) parts.push(`${formatVolume(h.volume)} volume`);
   } else if (isIntervalRun(w)) {
     const stats = intervalStats(w.intervals);
     parts.push(intervalStructure(w.intervals));

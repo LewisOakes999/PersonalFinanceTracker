@@ -15,6 +15,7 @@ const workout = (date: string, kind: WorkoutKind): Workout => ({
   sets: [],
   intervals: [],
   recoverySec: null,
+  segments: [],
   gearId: null,
 });
 const gear = (price: number | null, boughtOn: string | null): Gear => ({

@@ -16,6 +16,7 @@ const workout = (date: string, kind: WorkoutKind, extra: Partial<Workout> = {}):
   sets: [],
   intervals: [],
   recoverySec: null,
+  segments: [],
   gearId: null,
   ...extra,
 });
@@ -52,6 +53,7 @@ describe("kitStats", () => {
   it("adds up distance, including what was on it already, and spreads the price", () => {
     const s = kitStats(shoes, runs, NOW);
     expect(s.sessions).toBe(10);
+    expect(s.word).toBe("run");
     expect(s.km).toBe(120); // 20 + 10 × 10
     expect(s.costPerKm).toBe(1);
     expect(s.costPerSession).toBe(12);
@@ -85,6 +87,14 @@ describe("kitStats", () => {
     expect([s.costPerKm, s.costPerSession, s.wear, s.replaceOn]).toEqual([null, null, null, null]);
   });
 
+  it("calls them sessions once the kit has done more than one kind of workout", () => {
+    const g = gear();
+    const hyrox = workout("2026-10-12", "hybrid", { gearId: g.id, segments: [{ type: "run", distanceM: 1000, durationSec: 280 }] });
+    const s = kitStats(g, [workout("2026-10-10", "run", { gearId: g.id, distanceKm: 5 }), hyrox], NOW);
+    expect(s.word).toBe("session");
+    expect(s.km).toBe(6); // the hybrid's run counts on the shoes
+  });
+
   it("prices sessions without distance, like gym shoes", () => {
     const g = gear({ kinds: ["strength"], price: 60, lifespanKm: null });
     const s = kitStats(g, [workout("2026-10-01", "strength", { gearId: g.id }), workout("2026-10-08", "strength", { gearId: g.id })], NOW);
@@ -112,6 +122,14 @@ describe("choosing kit for a workout", () => {
     expect(kitFor("walk", all).map((g) => g.name)).toEqual(["Trail"]);
   });
 
+  it("offers kit for runs or strength in a hybrid session too", () => {
+    const gym = gear({ name: "Gym", kinds: ["strength"] });
+    const bike = gear({ name: "Bike", kinds: ["cycle"] });
+    const hyrox = gear({ name: "Hyrox shoes", kinds: ["hybrid"] });
+    expect(kitFor("hybrid", [...all, gym, bike, hyrox]).map((g) => g.name)).toEqual(["Road", "Trail", "Gym", "Hyrox shoes"]);
+    expect(kitFor("strength", [road, gym, hyrox]).map((g) => g.name)).toEqual(["Gym"]); // not the other way round
+  });
+
   it("picks what you used last time, or the only option", () => {
     const ws = [
       workout("2026-10-01", "run", { gearId: road.id }),
@@ -122,6 +140,16 @@ describe("choosing kit for a workout", () => {
     expect(defaultKit("run", all, [])).toBeNull(); // two to choose from, no history
     expect(defaultKit("walk", all, [])).toBe(trail.id);
     expect(defaultKit("swim", all, ws)).toBeNull();
+  });
+
+  it("starts a first hybrid session in what you last ran in", () => {
+    const gym = gear({ name: "Gym", kinds: ["strength"] });
+    const kit = [road, trail, gym];
+    const ws = [workout("2026-10-01", "strength", { gearId: gym.id }), workout("2026-09-20", "run", { gearId: road.id })];
+    expect(defaultKit("hybrid", kit, ws)).toBe(road.id); // runs come before lifting
+    expect(defaultKit("hybrid", kit, [ws[0]])).toBe(gym.id);
+    const hyrox = workout("2026-10-05", "hybrid", { gearId: trail.id });
+    expect(defaultKit("hybrid", kit, [...ws, hyrox])).toBe(trail.id); // what you wore last time wins
   });
 
   it("names one use of the kit", () => {

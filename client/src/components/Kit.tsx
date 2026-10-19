@@ -6,7 +6,7 @@ import type { Gear, Transaction, Workout, WorkoutKind } from "../types";
 import { Button, Field, Modal, SectionTitle, Tile } from "./ui";
 import { KIND_ICONS } from "../lib/fitnessIcons";
 import { KINDS, formatMinutes, isCardio } from "../lib/fitness";
-import { kitStats, sessionWord, type KitStats } from "../lib/kit";
+import { kitStats, type KitStats } from "../lib/kit";
 import { formatDate, formatCurrency } from "../lib/format";
 import { useCurrency } from "../lib/CurrencyContext";
 import { toast } from "../lib/toast";
@@ -111,7 +111,7 @@ export function KitView({
                   <span className="text-glass-3 num block text-xs">
                     {s.km > 0 && `${kmText(s.km)} · `}
                     {s.costPerKm !== null && `${format(s.costPerKm)}/km · `}
-                    {s.sessions} {sessionWord(s.gear.kinds)}
+                    {s.sessions} {s.word}
                     {s.sessions === 1 ? "" : "s"} · retired {formatDate(s.gear.retiredAt!)}
                   </span>
                 </span>
@@ -149,7 +149,7 @@ function KitCard({
   const g = s.gear;
   const Icon = KIND_ICONS[g.kinds[0] ?? "other"];
   const distanceKit = g.kinds.some(isCardio);
-  const word = sessionWord(g.kinds);
+  const word = s.word;
   const wearPct = s.wear !== null ? Math.min(100, Math.round(s.wear * 100)) : null;
   const worn = s.wear !== null && s.wear >= 1;
   const nearlyWorn = s.wear !== null && s.wear >= 0.9;
@@ -391,6 +391,9 @@ export function KitModal({ gear, onClose, onSaved }: { gear: Gear | null; onClos
               );
             })}
           </div>
+          {(kinds.includes("run") || kinds.includes("strength")) && !kinds.includes("hybrid") && (
+            <p className="text-glass-3 mt-1.5 text-xs">You can pick it for hybrid sessions too.</p>
+          )}
         </div>
 
         <div>

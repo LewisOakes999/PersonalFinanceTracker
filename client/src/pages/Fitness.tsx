@@ -20,6 +20,7 @@ import { Button, Field, SectionTitle, StatTile, Tile } from "../components/ui";
 import { LogWorkoutModal } from "../components/LogWorkoutModal";
 import { GoalModal, GoalsTile, GoalsView } from "../components/FitnessGoals";
 import { KitModal, KitView } from "../components/Kit";
+import { HybridView } from "../components/HybridSessions";
 import { CostsSection, SpendingModal } from "../components/TrainingCosts";
 import { defaultKit } from "../lib/kit";
 import { goalStatus, goalTitle, newlyReached, type GoalStatus } from "../lib/goals";
@@ -27,12 +28,14 @@ import {
   byBodyFat,
   cardioBests,
   cardioSessions,
+  effectiveKm,
   exerciseProgress,
   formatClock,
   formatMetres,
   formatMinutes,
   formatPace,
   formatVolume,
+  hybridSessions,
   intervalSessions,
   isIntervalRun,
   kindInfo,
@@ -68,7 +71,7 @@ export type FitnessView = "overview" | "strength" | "cardio" | "weight" | "goals
 const HEADINGS: Record<FitnessView, { title: string; blurb: string }> = {
   overview: { title: "Fitness overview", blurb: "Your week, your streak and your recent workouts" },
   strength: { title: "Strength", blurb: "Each lift's progress and personal bests" },
-  cardio: { title: "Cardio", blurb: "Distance and pace for your runs, rides, swims and walks" },
+  cardio: { title: "Cardio", blurb: "Distance and pace for your runs, rides, swims, walks and hybrid sessions" },
   weight: { title: "Body weight", blurb: "Your weight and body fat over time" },
   goals: { title: "Fitness goals", blurb: "Targets for your lifts, times and weight, and when you'll reach them" },
   kit: { title: "Kit & costs", blurb: "What your training costs, and how far your kit has gone" },
@@ -148,6 +151,11 @@ export default function Fitness({
       if (sessions.length > 1 && fastest?.workoutId === w.id)
         pbs.push(`${paceHigherIsBetter(w.kind) ? "fastest" : "best-paced"} ${label} (${formatPace(w.kind, fastest.pace)})`);
       if (sessions.length > 1 && longest?.workoutId === w.id) pbs.push(`longest ${label} (${longest.km} km)`);
+    }
+    // Hybrid sessions: quicker than any earlier session of the same shape.
+    if (w.kind === "hybrid") {
+      const session = hybridSessions(fresh).find((s) => s.workoutId === w.id);
+      if (session?.pb && session.totalSec !== null) pbs.push(`${session.name} (${formatClock(session.totalSec)})`);
     }
     // Interval runs: a faster average than any earlier session of the same
     // shape, or the quickest rep yet at a distance run before.
@@ -246,6 +254,7 @@ export default function Fitness({
             new Set([
               ...progress.flatMap((p) => p.sessions.filter((s) => s.pb).map((s) => s.workoutId)),
               ...intervalSessions(workouts).filter((s) => s.pb).map((s) => s.workoutId),
+              ...hybridSessions(workouts).filter((s) => s.pb).map((s) => s.workoutId),
             ])
           }
           onLog={() => setEditing("new")}
@@ -834,7 +843,8 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
   // Kinds actually logged, most recently done first.
   const kinds = useMemo(() => {
     const latest = new Map<WorkoutKind, string>();
-    for (const w of workouts) if (CARDIO.includes(w.kind) && !latest.has(w.kind)) latest.set(w.kind, w.date);
+    for (const w of workouts)
+      if ((CARDIO.includes(w.kind) || w.kind === "hybrid") && !latest.has(w.kind)) latest.set(w.kind, w.date);
     return [...latest.keys()];
   }, [workouts]);
   const [picked, setPicked] = useState<WorkoutKind | null>(null);
@@ -849,18 +859,62 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
     );
   }
   const kind = picked && kinds.includes(picked) ? picked : kinds[0];
+  const pills = kinds.length > 1 && (
+    <div className="flex flex-wrap gap-2">
+      {kinds.map((k) => {
+        const Icon = KIND_ICONS[k];
+        const on = k === kind;
+        return (
+          <button
+            key={k}
+            onClick={() => setPicked(k)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+              on
+                ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
+                : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
+            }`}
+          >
+            <Icon size={13} strokeWidth={1.75} /> {kindInfo(k).label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  if (kind === "hybrid") {
+    return (
+      <>
+        {pills}
+        <HybridView workouts={workouts} onLog={onLog} />
+      </>
+    );
+  }
+
   const sessions = cardioSessions(workouts, kind);
   const bests = cardioBests(sessions, kind);
   const weeks = weeklySummary(
     workouts.filter((w) => w.kind === kind),
     12
   );
+  // The running in hybrid sessions counts towards running distance — though not
+  // longest run or best pace, since stations break it up.
+  const hybrids = kind === "run" ? workouts.filter((w) => w.kind === "hybrid") : [];
+  const hybridWeeks = weeklySummary(hybrids, 12);
+  const anyHybridKm = hybridWeeks.some((w) => (w.km.hybrid ?? 0) > 0);
   const last4 = weeks.slice(-4);
-  const last4Km = last4.reduce((s, w) => s + (w.km[kind] ?? 0), 0);
+  const last4Hybrid = hybridWeeks.slice(-4);
+  const last4Km =
+    last4.reduce((s, w) => s + (w.km[kind] ?? 0), 0) + last4Hybrid.reduce((s, w) => s + (w.km.hybrid ?? 0), 0);
   const last4Count = last4.reduce((s, w) => s + w.workouts, 0);
-  const totalKm = sessions.reduce((s, x) => s + (x.km ?? 0), 0);
+  const last4Hybrids = last4Hybrid.reduce((s, w) => s + w.workouts, 0);
+  const totalKm =
+    sessions.reduce((s, x) => s + (x.km ?? 0), 0) + hybrids.reduce((s, w) => s + (effectiveKm(w) ?? 0), 0);
   const label = kindInfo(kind).label.toLowerCase();
-  const distanceChart = weeks.map((w) => ({ label: shortDate(w.start), km: Math.round((w.km[kind] ?? 0) * 100) / 100 }));
+  const plus = (n: number) => (n > 0 ? ` · ${n} hybrid` : "");
+  const distanceChart = weeks.map((w, i) => ({
+    label: shortDate(w.start),
+    km: Math.round((w.km[kind] ?? 0) * 100) / 100,
+    hybridKm: Math.round((hybridWeeks[i].km.hybrid ?? 0) * 100) / 100,
+  }));
   const paceChart = sessions
     .filter((s) => s.pace !== null)
     .map((s) => ({ label: shortDate(s.date), pace: Math.round(s.pace! * 10) / 10, km: s.km }));
@@ -868,34 +922,14 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
 
   return (
     <>
-      {kinds.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {kinds.map((k) => {
-            const Icon = KIND_ICONS[k];
-            const on = k === kind;
-            return (
-              <button
-                key={k}
-                onClick={() => setPicked(k)}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
-                  on
-                    ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
-                    : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
-                }`}
-              >
-                <Icon size={13} strokeWidth={1.75} /> {kindInfo(k).label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {pills}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
         <StatTile
           label="Last 4 weeks"
           value={`${last4Km.toFixed(1)} km`}
           tone="accent"
-          sub={`${last4Count} ${label}${last4Count === 1 ? "" : "s"}`}
+          sub={`${last4Count} ${label}${last4Count === 1 ? "" : "s"}${plus(last4Hybrids)}`}
         />
         <StatTile
           label="Longest"
@@ -908,7 +942,11 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
           tone={bests.fastest ? "accent" : "default"}
           sub={bests.fastest ? formatDate(bests.fastest.date) : "log distance and time"}
         />
-        <StatTile label="All time" value={`${totalKm.toFixed(1)} km`} sub={`${sessions.length} ${label}${sessions.length === 1 ? "" : "s"}`} />
+        <StatTile
+          label="All time"
+          value={`${totalKm.toFixed(1)} km`}
+          sub={`${sessions.length} ${label}${sessions.length === 1 ? "" : "s"}${plus(hybrids.length)}`}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -923,13 +961,32 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
                 <Tooltip
                   contentStyle={tooltipStyle}
                   cursor={{ fill: "rgba(255,255,255,0.05)" }}
-                  formatter={(v: number) => [`${v} km`, "Distance"]}
+                  formatter={(v: number, key) => [`${v} km`, key === "hybridKm" ? "Hybrid running" : "Distance"]}
                   labelFormatter={(l) => `Week of ${l}`}
                 />
-                <Bar dataKey="km" fill={BAR} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                <Bar
+                  dataKey="km"
+                  stackId="distance"
+                  fill={BAR}
+                  radius={anyHybridKm ? undefined : [4, 4, 0, 0]}
+                  isAnimationActive={false}
+                />
+                {anyHybridKm && (
+                  <Bar
+                    dataKey="hybridKm"
+                    stackId="distance"
+                    fill={BAR}
+                    fillOpacity={0.45}
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
+                  />
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {anyHybridKm && (
+            <p className="text-glass-3 mt-2 text-[11px]">The fainter part of each bar is the running in your hybrid sessions.</p>
+          )}
         </Tile>
 
         <Tile className="p-[22px]">

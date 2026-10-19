@@ -12,6 +12,10 @@ import {
   formatMetres,
   formatMinutes,
   formatVolume,
+  HYROX,
+  hybridName,
+  hybridSessions,
+  hybridSummary,
   intervalSessions,
   intervalStats,
   intervalStructure,
@@ -43,6 +47,7 @@ const workout = (date: string, kind: WorkoutKind, extra: Partial<Workout> = {}):
   sets: [],
   intervals: [],
   recoverySec: null,
+  segments: [],
   gearId: null,
   ...extra,
 });
@@ -303,6 +308,62 @@ describe("volume", () => {
 
   it("formats with thousands", () => {
     expect(formatVolume(12345.6)).toBe("12,346 kg");
+  });
+});
+
+describe("hybrid sessions", () => {
+  const timedHyrox = HYROX.map((x, i) => ({ ...x, durationSec: x.type === "run" ? 300 + i : 240 }));
+  const wallBalls = (w: number | null) =>
+    timedHyrox.map((x) => (x.type === "station" && x.exercise === "Wall Balls" ? { ...x, weightKg: w } : x));
+
+  it("has a Hyrox template: eight 1 km runs, each followed by a station", () => {
+    expect(HYROX).toHaveLength(16);
+    expect(HYROX.filter((_, i) => i % 2 === 0).every((x) => x.type === "run" && x.distanceM === 1000)).toBe(true);
+    expect(HYROX[15]).toMatchObject({ type: "station", exercise: "Wall Balls", reps: 100 });
+  });
+
+  it("counts the runs' distance, not the stations'", () => {
+    const w = workout("2026-10-10", "hybrid", { segments: HYROX });
+    expect(effectiveKm(w)).toBe(8); // the SkiErg and row metres aren't running
+  });
+
+  it("adds stations done for reps with a weight to the volume", () => {
+    expect(workoutVolume({ sets: [], segments: wallBalls(6) })).toBe(600);
+    expect(workoutVolume({ sets: [], segments: HYROX })).toBe(0); // no weights entered
+  });
+
+  it("sums up the runs and stations", () => {
+    const h = hybridSummary(wallBalls(6));
+    expect(h).toMatchObject({ runs: 8, runKm: 8, stations: 8, volume: 600 });
+    expect(h.runPace).toBeCloseTo((8 * 300 + 56) / 8, 10); // runs take 300 s plus their position
+    expect(h.splitsSec).toBe(8 * 240 + (8 * 300 + 56));
+    expect(hybridSummary(HYROX).splitsSec).toBeNull(); // not every segment timed
+  });
+
+  it("names a session by its shape, and flags a quicker one of the same shape", () => {
+    expect(hybridName(HYROX)).toBe("Hyrox");
+    const mini = HYROX.slice(0, 4);
+    expect(hybridName(mini)).toBe("2 runs + 2 stations");
+    const ws = [
+      workout("2026-09-01", "hybrid", { segments: HYROX, durationSec: 4800 }),
+      workout("2026-09-15", "hybrid", { segments: mini, durationSec: 1200 }), // a different shape: no PB
+      workout("2026-10-01", "hybrid", { segments: HYROX, durationSec: 4700 }),
+      workout("2026-10-10", "hybrid", { segments: HYROX, durationSec: 4750 }),
+    ];
+    const ss = hybridSessions(ws);
+    expect(ss.map((x) => [x.name, x.totalSec, x.pb])).toEqual([
+      ["Hyrox", 4800, false],
+      ["2 runs + 2 stations", 1200, false],
+      ["Hyrox", 4700, true],
+      ["Hyrox", 4750, false],
+    ]);
+    // Without a time logged, the splits stand in.
+    expect(hybridSessions([workout("2026-10-12", "hybrid", { segments: timedHyrox })])[0].totalSec).toBe(4376);
+  });
+
+  it("summarises a hybrid session in a line", () => {
+    const w = workout("2026-10-10", "hybrid", { segments: wallBalls(6), durationSec: 4532 });
+    expect(workoutSummary(w)).toBe("8 runs (8 km) · 8 stations · 1:15:32 · 600 kg volume");
   });
 });
 

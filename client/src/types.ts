@@ -222,7 +222,19 @@ export interface Settings {
   weeklyWorkoutGoal: number;
 }
 
-export type WorkoutKind = "strength" | "run" | "cycle" | "swim" | "walk" | "class" | "sport" | "other";
+export type WorkoutKind = "strength" | "run" | "cycle" | "swim" | "walk" | "hybrid" | "class" | "sport" | "other";
+
+/** One part of a hybrid session (a Hyrox, say), in the order done: a run, or a station. */
+export type HybridSegment =
+  | { type: "run"; distanceM: number | null; durationSec: number | null }
+  | {
+      type: "station";
+      exercise: string;
+      reps: number | null;
+      weightKg: number | null;
+      distanceM: number | null;
+      durationSec: number | null;
+    };
 
 export interface WorkoutSet {
   id?: string;
@@ -249,6 +261,7 @@ export interface Workout {
   sets: WorkoutSet[];
   intervals: IntervalRep[]; // empty unless it's an interval run
   recoverySec: number | null; // between reps
+  segments: HybridSegment[]; // empty unless it's a hybrid session
   gearId: string | null; // the kit used
 }
 
@@ -294,6 +307,7 @@ export interface WorkoutPreset {
   sets: WorkoutSet[];
   intervals: IntervalRep[];
   recoverySec: number | null;
+  segments: HybridSegment[];
 }
 
 export type FitnessGoalType = "strength" | "cardio" | "body";

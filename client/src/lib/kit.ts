@@ -13,6 +13,7 @@ const RATE_WINDOW = 56; // judge how fast it's wearing on the last 8 weeks
 export interface KitStats {
   gear: Gear;
   sessions: number; // workouts logged with it
+  word: string; // what one of them is called: "run", "ride", "session"…
   km: number; // in total, including what was on it when added
   seconds: number;
   costPerKm: number | null;
@@ -53,6 +54,8 @@ export function kitStats(gear: Gear, workouts: Workout[], now = new Date()): Kit
   return {
     gear,
     sessions: used.length,
+    // Shoes for runs that also did a hybrid session have done "sessions", not "runs".
+    word: sessionWord([...new Set([...gear.kinds, ...used.map((w) => w.kind)])]),
     km,
     seconds: used.reduce((s, w) => s + (w.durationSec ?? 0), 0),
     costPerKm: price !== null && km > 0 ? price / km : null,
@@ -66,21 +69,32 @@ export function kitStats(gear: Gear, workouts: Workout[], now = new Date()): Kit
   };
 }
 
+// A hybrid session is runs and stations, so the shoes you run or lift in suit
+// it too, without marking every pair for hybrid as well.
+const ALSO_SUITS: Partial<Record<WorkoutKind, WorkoutKind[]>> = { hybrid: ["run", "strength"] };
+
+/** Is this kit meant for a workout of this kind? */
+export const suits = (g: Gear, kind: WorkoutKind) =>
+  g.kinds.includes(kind) || (ALSO_SUITS[kind] ?? []).some((k) => g.kinds.includes(k));
+
 /** Kit that can be picked for a workout of this kind: in use, and meant for it. */
-export const kitFor = (kind: WorkoutKind, gear: Gear[]) =>
-  gear.filter((g) => !g.retiredAt && g.kinds.includes(kind));
+export const kitFor = (kind: WorkoutKind, gear: Gear[]) => gear.filter((g) => !g.retiredAt && suits(g, kind));
 
 /**
  * What to pick for a new workout: whatever you last used for this kind (if
- * it's still in use), or the only option when there's just one.
+ * it's still in use) — for a first hybrid session, what you last ran in, then
+ * lifted in — or the only option when there's just one.
  */
 export function defaultKit(kind: WorkoutKind, gear: Gear[], workouts: Workout[]): string | null {
   const options = kitFor(kind, gear);
   const ids = new Set(options.map((g) => g.id));
-  const last = [...workouts]
-    .filter((w) => w.kind === kind && w.gearId && ids.has(w.gearId))
-    .sort((a, b) => b.date.localeCompare(a.date))[0];
-  if (last) return last.gearId;
+  const newest = [...workouts]
+    .filter((w) => w.gearId && ids.has(w.gearId))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  for (const k of [kind, ...(ALSO_SUITS[kind] ?? [])]) {
+    const last = newest.find((w) => w.kind === k);
+    if (last) return last.gearId;
+  }
   return options.length === 1 ? options[0].id : null;
 }
 

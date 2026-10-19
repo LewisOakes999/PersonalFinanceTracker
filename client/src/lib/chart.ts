@@ -66,3 +66,17 @@ export function fittedAxis(
   for (let v = min; v <= max + step / 2; v += step) ticks.push(Math.round(v * 100) / 100);
   return { domain: [min, max], ticks };
 }
+
+/** Like fittedAxis, but for times: ticks on round minutes and seconds (20:00, 20:30…). */
+export function clockAxis(values: number[]): { domain: [number, number]; ticks: number[] } | undefined {
+  if (values.length === 0) return undefined;
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const span = hi - lo || 60;
+  const step = [15, 30, 60, 120, 300, 600, 900, 1800, 3600].find((st) => span / st <= 5) ?? 3600;
+  const min = Math.floor((lo - span * 0.08) / step) * step;
+  const max = Math.ceil((hi + span * 0.08) / step) * step;
+  const ticks: number[] = [];
+  for (let v = Math.max(0, min); v <= max; v += step) ticks.push(v);
+  return { domain: [Math.max(0, min), max], ticks };
+}

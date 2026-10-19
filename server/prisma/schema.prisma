@@ -357,6 +357,10 @@ model Workout {
   // be null, not both), and the recovery between them. Empty for a steady run.
   intervals   Json         @default("[]")
   recoverySec Int?
+  // Hybrid sessions (a Hyrox, say): runs and stations in the order done —
+  // [{ type: "run", distanceM, durationSec } | { type: "station", exercise,
+  // reps, weightKg, distanceM, durationSec }]. Empty for every other kind.
+  segments    Json         @default("[]")
   gearId      String? // the shoes, bike or other kit used
   gear        Gear?        @relation(fields: [gearId], references: [id], onDelete: SetNull)
   createdAt   DateTime     @default(now())
@@ -393,6 +397,7 @@ model WorkoutPreset {
   sets        Json     @default("[]")
   intervals   Json     @default("[]")
   recoverySec Int?
+  segments    Json     @default("[]")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

@@ -33,6 +33,7 @@ import type {
   FitnessSpending,
   FitnessSpendingChoice,
   Gear,
+  HybridSegment,
   IntervalRep,
   Workout,
   WorkoutKind,
@@ -51,6 +52,7 @@ export type WorkoutInput = {
   sets: Pick<WorkoutSet, "exercise" | "reps" | "weightKg">[];
   intervals: IntervalRep[];
   recoverySec: number | null;
+  segments: HybridSegment[];
   gearId: string | null;
 };
 
