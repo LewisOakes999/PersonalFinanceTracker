@@ -29,6 +29,7 @@ import type {
   TrendPoint,
   User,
   BodyWeight,
+  FitnessGoal,
   IntervalRep,
   Workout,
   WorkoutKind,
@@ -48,6 +49,12 @@ export type WorkoutInput = {
   intervals: IntervalRep[];
   recoverySec: number | null;
 };
+
+/** What the goal form sends: the fields for its type, plus an optional deadline. */
+export type FitnessGoalInput = Pick<
+  FitnessGoal,
+  "type" | "exercise" | "weightKg" | "reps" | "kind" | "distanceKm" | "timeSec" | "measure" | "target" | "deadline"
+> & { startDate?: string };
 
 import { toast } from "./../lib/toast";
 
@@ -361,6 +368,12 @@ export const api = {
   savePreset: (data: Omit<WorkoutInput, "date" | "notes"> & { name: string }) =>
     request<WorkoutPreset>("/fitness/presets", { method: "POST", body: JSON.stringify(data) }),
   deletePreset: (id: string) => request<void>(`/fitness/presets/${id}`, { method: "DELETE" }),
+  listFitnessGoals: () => request<FitnessGoal[]>("/fitness/goals"),
+  createFitnessGoal: (data: FitnessGoalInput) =>
+    request<FitnessGoal>("/fitness/goals", { method: "POST", body: JSON.stringify(data) }),
+  updateFitnessGoal: (id: string, data: FitnessGoalInput) =>
+    request<FitnessGoal>(`/fitness/goals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteFitnessGoal: (id: string) => request<void>(`/fitness/goals/${id}`, { method: "DELETE" }),
   updateWeeklyGoal: (weeklyWorkoutGoal: number) =>
     request<Settings>("/settings", { method: "PUT", body: JSON.stringify({ weeklyWorkoutGoal }) }),
 

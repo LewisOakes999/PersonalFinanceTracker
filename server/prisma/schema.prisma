@@ -38,6 +38,7 @@ model User {
   workouts     Workout[]
   workoutPresets WorkoutPreset[]
   bodyWeights  BodyWeight[]
+  fitnessGoals FitnessGoal[]
 }
 
 model CategoryRule {
@@ -400,4 +401,29 @@ model BodyWeight {
   createdAt  DateTime @default(now())
 
   @@unique([userId, date]) // one weigh-in per day; logging again replaces it
+}
+
+// A fitness target: a lift, a time over a distance, or a body weight or body
+// fat figure. Progress and the projected date are worked out from the logged
+// workouts and weigh-ins; reaching it only counts from startDate, so "get back
+// to 100 kg" isn't met by a lift from years ago.
+model FitnessGoal {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String // strength | cardio | body
+  exercise   String? // strength: matched case-insensitively, like progress
+  weightKg   Decimal?  @db.Decimal(7, 2) // strength: the weight to lift; null for a bodyweight move
+  reps       Int? // strength: reps at that weight (or reps alone for a bodyweight move)
+  kind       String? // cardio: run | cycle | swim | walk
+  distanceKm Decimal?  @db.Decimal(8, 3) // cardio
+  timeSec    Int? // cardio: the time to beat over that distance
+  measure    String? // body: weight | bodyFat
+  target     Decimal?  @db.Decimal(6, 2) // body: kg, or body fat %
+  deadline   DateTime? // optional date to reach it by
+  startDate  DateTime // the day it was set
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
 }

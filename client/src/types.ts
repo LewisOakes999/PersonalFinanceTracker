@@ -271,6 +271,30 @@ export interface WorkoutPreset {
   recoverySec: number | null;
 }
 
+export type FitnessGoalType = "strength" | "cardio" | "body";
+export type BodyMeasure = "weight" | "bodyFat";
+
+/**
+ * A fitness target. Strength: `exercise` at `weightKg` × `reps` (weight null
+ * for a bodyweight move, where `reps` is the target). Cardio: `distanceKm` in
+ * `timeSec`. Body: `target` kg or body fat %. Reaching it counts from `startDate`.
+ */
+export interface FitnessGoal {
+  id: string;
+  type: FitnessGoalType;
+  exercise: string | null;
+  weightKg: number | null;
+  reps: number | null;
+  kind: WorkoutKind | null;
+  distanceKm: number | null;
+  timeSec: number | null;
+  measure: BodyMeasure | null;
+  target: number | null;
+  deadline: string | null;
+  startDate: string;
+  createdAt: string;
+}
+
 export interface Totals {
   income: number;
   expenses: number;

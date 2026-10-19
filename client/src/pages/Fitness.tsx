@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -15,9 +15,11 @@ import {
 } from "recharts";
 import { Plus } from "lucide-react";
 import { api } from "../api/client";
-import type { BodyWeight, Workout, WorkoutKind, WorkoutPreset } from "../types";
+import type { BodyWeight, FitnessGoal, Workout, WorkoutKind, WorkoutPreset } from "../types";
 import { Button, Field, SectionTitle, StatTile, Tile } from "../components/ui";
 import { LogWorkoutModal } from "../components/LogWorkoutModal";
+import { GoalModal, GoalsTile, GoalsView } from "../components/FitnessGoals";
+import { goalStatus, goalTitle, newlyReached, type GoalStatus } from "../lib/goals";
 import {
   byBodyFat,
   cardioBests,
@@ -57,13 +59,14 @@ const AXIS = "rgba(245,245,247,0.45)";
 const CARDIO: WorkoutKind[] = ["run", "cycle", "swim", "walk"];
 
 /** Which part of Fitness to show — each is its own page in the sidebar's Health section. */
-export type FitnessView = "overview" | "strength" | "cardio" | "weight";
+export type FitnessView = "overview" | "strength" | "cardio" | "weight" | "goals";
 
 const HEADINGS: Record<FitnessView, { title: string; blurb: string }> = {
   overview: { title: "Fitness overview", blurb: "Your week, your streak and your recent workouts" },
   strength: { title: "Strength", blurb: "Each lift's progress and personal bests" },
   cardio: { title: "Cardio", blurb: "Distance and pace for your runs, rides, swims and walks" },
   weight: { title: "Body weight", blurb: "Your weight and body fat over time" },
+  goals: { title: "Fitness goals", blurb: "Targets for your lifts, times and weight, and when you'll reach them" },
 };
 
 /** "14 Oct" — for chart axes, where the year is noise. */
@@ -73,18 +76,25 @@ const shortDate = (iso: string | Date) =>
 // Up to two decimals, so 1.25 kg plate jumps (73.75 kg) show exactly.
 const kg = (n: number) => `${parseFloat(n.toFixed(2))} kg`;
 
-export default function Fitness({ view = "overview" }: { view?: FitnessView } = {}) {
+export default function Fitness({
+  view = "overview",
+  onView,
+}: { view?: FitnessView; onView?: (v: FitnessView) => void } = {}) {
   const [workouts, setWorkouts] = useState<Workout[] | null>(null);
   const [weights, setWeights] = useState<BodyWeight[]>([]);
   const [presets, setPresets] = useState<WorkoutPreset[]>([]);
   const [goal, setGoal] = useState(3);
   const [editing, setEditing] = useState<Workout | "new" | null>(null);
+  const [goals, setGoals] = useState<FitnessGoal[]>([]);
+  const [editingGoal, setEditingGoal] = useState<FitnessGoal | "new" | null>(null);
 
   const loadWorkouts = () => api.listWorkouts().then((w) => (setWorkouts(w), w));
-  const loadWeights = () => api.listBodyWeights().then(setWeights);
+  const loadWeights = () => api.listBodyWeights().then((w) => (setWeights(w), w));
   const loadPresets = () => api.listPresets().then(setPresets).catch(() => setPresets([]));
+  const loadGoals = () => api.listFitnessGoals().then(setGoals).catch(() => setGoals([]));
   useEffect(() => {
     loadPresets();
+    loadGoals();
     loadWorkouts().catch((e) => toast.error((e as Error).message));
     loadWeights().catch(() => setWeights([]));
     api
@@ -94,6 +104,14 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
   }, []);
 
   const progress = useMemo(() => exerciseProgress(workouts ?? []), [workouts]);
+  const statuses = useMemo(
+    () => goals.map((g) => goalStatus(g, workouts ?? [], weights)),
+    [goals, workouts, weights]
+  );
+  /** Cheer any goal the latest workout or weigh-in pushed over the line. */
+  const celebrate = (after: GoalStatus[]) => {
+    for (const s of newlyReached(statuses, after)) toast.success(`Goal reached: ${goalTitle(s.goal)}!`);
+  };
 
   const saved = async (w: Workout) => {
     const wasEdit = editing !== "new";
@@ -128,6 +146,29 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
     }
     if (pbs.length > 0) toast.success(`New PB: ${pbs.join(", ")}`);
     else toast.success(wasEdit ? "Workout updated." : "Workout logged.");
+    celebrate(goals.map((g) => goalStatus(g, fresh, weights)));
+  };
+
+  const weightsChanged = async () => {
+    const fresh = await loadWeights().catch(() => null);
+    if (fresh) celebrate(goals.map((g) => goalStatus(g, workouts ?? [], fresh)));
+  };
+
+  const goalSaved = (g: FitnessGoal) => {
+    toast.success(editingGoal === "new" ? `Goal set: ${goalTitle(g)}.` : "Goal updated.");
+    setEditingGoal(null);
+    loadGoals();
+  };
+
+  const removeGoal = async (g: FitnessGoal) => {
+    if (!confirm(`Delete the goal "${goalTitle(g)}"?`)) return;
+    try {
+      await api.deleteFitnessGoal(g.id);
+      toast.success("Goal deleted.");
+      loadGoals();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
 
   const remove = async (w: Workout) => {
@@ -157,9 +198,15 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
           <h1 className="text-[26px] font-semibold tracking-tight text-glass">{HEADINGS[view].title}</h1>
           <p className="text-glass-3 mt-1 text-[13px]">{HEADINGS[view].blurb}</p>
         </div>
-        <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditing("new")}>
-          <Plus size={14} strokeWidth={2} /> Log Workout
-        </Button>
+        {view === "goals" ? (
+          <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditingGoal("new")}>
+            <Plus size={14} strokeWidth={2} /> New Goal
+          </Button>
+        ) : (
+          <Button variant="primary" className="inline-flex items-center gap-1.5" onClick={() => setEditing("new")}>
+            <Plus size={14} strokeWidth={2} /> Log Workout
+          </Button>
+        )}
       </header>
 
       {workouts && view === "overview" && (
@@ -176,11 +223,15 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
           onLog={() => setEditing("new")}
           onEdit={setEditing}
           onDelete={remove}
+          goalsTile={<GoalsTile statuses={statuses} onOpen={() => onView?.("goals")} />}
         />
       )}
       {workouts && view === "strength" && <StrengthView progress={progress} onLog={() => setEditing("new")} />}
       {workouts && view === "cardio" && <CardioView workouts={workouts} onLog={() => setEditing("new")} />}
-      {view === "weight" && <WeightView weights={weights} onChanged={loadWeights} />}
+      {view === "weight" && <WeightView weights={weights} onChanged={weightsChanged} />}
+      {workouts && view === "goals" && (
+        <GoalsView statuses={statuses} onNew={() => setEditingGoal("new")} onEdit={setEditingGoal} onDelete={removeGoal} />
+      )}
 
       {editing && (
         <LogWorkoutModal
@@ -190,6 +241,16 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
           onPresetsChanged={loadPresets}
           onClose={() => setEditing(null)}
           onSaved={saved}
+        />
+      )}
+      {editingGoal && (
+        <GoalModal
+          goal={editingGoal === "new" ? null : editingGoal}
+          exerciseNames={progress.map((p) => p.name)}
+          workouts={workouts ?? []}
+          weights={weights}
+          onClose={() => setEditingGoal(null)}
+          onSaved={goalSaved}
         />
       )}
     </div>
@@ -220,6 +281,7 @@ function Overview({
   onLog,
   onEdit,
   onDelete,
+  goalsTile,
 }: {
   workouts: Workout[];
   goal: number;
@@ -228,6 +290,7 @@ function Overview({
   onLog: () => void;
   onEdit: (w: Workout) => void;
   onDelete: (w: Workout) => void;
+  goalsTile?: ReactNode;
 }) {
   const [showAll, setShowAll] = useState(false);
   const weeks = useMemo(() => weeklySummary(workouts, 12), [workouts]);
@@ -341,6 +404,8 @@ function Overview({
           never breaks your streak.
         </p>
       </Tile>
+
+      {goalsTile}
 
       <Tile className="p-[22px]">
         <SectionTitle>Recent Workouts</SectionTitle>

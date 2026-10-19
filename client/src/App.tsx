@@ -7,6 +7,7 @@ import {
   ChartPie,
   ChevronDown,
   Dumbbell,
+  Flag,
   LayoutDashboard,
   Menu,
   ReceiptText,
@@ -48,6 +49,7 @@ type Tab =
   | "strength"
   | "cardio"
   | "weight"
+  | "fitnessGoals"
   | "settings";
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
@@ -63,6 +65,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "strength", label: "Strength", icon: Dumbbell },
   { id: "cardio", label: "Cardio", icon: Route },
   { id: "weight", label: "Body weight", icon: Scale },
+  { id: "fitnessGoals", label: "Goals", icon: Flag },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -72,7 +75,7 @@ const NAV_SECTIONS: { label?: string; tabs: Tab[] }[] = [
     label: "Money",
     tabs: ["dashboard", "transactions", "analytics", "budgets", "goals", "investments", "forecast", "tax"],
   },
-  { label: "Health", tabs: ["fitness", "strength", "cardio", "weight"] },
+  { label: "Health", tabs: ["fitness", "strength", "cardio", "weight", "fitnessGoals"] },
   { tabs: ["settings"] },
 ];
 
@@ -82,7 +85,10 @@ const FITNESS_VIEWS: Partial<Record<Tab, FitnessView>> = {
   strength: "strength",
   cardio: "cardio",
   weight: "weight",
+  fitnessGoals: "goals",
 };
+const tabForView = (v: FitnessView) =>
+  (Object.keys(FITNESS_VIEWS) as Tab[]).find((t) => FITNESS_VIEWS[t] === v) ?? "fitness";
 
 /** The area a page belongs to, which sets its accent colour (Health is green). */
 const areaOf = (tab: Tab) =>
@@ -386,8 +392,8 @@ export default function App() {
           {tab === "investments" && <Investments onManageAccounts={() => manage("accounts")} />}
           {tab === "forecast" && <Forecast />}
           {tab === "tax" && <Tax />}
-          {/* One Fitness page for all four views, so moving between them keeps its data. */}
-          {FITNESS_VIEWS[tab] && <Fitness view={FITNESS_VIEWS[tab]} />}
+          {/* One Fitness page for all its views, so moving between them keeps its data. */}
+          {FITNESS_VIEWS[tab] && <Fitness view={FITNESS_VIEWS[tab]} onView={(v) => go(tabForView(v))} />}
           {tab === "settings" && (
             <Settings
               focusSection={settingsFocus}

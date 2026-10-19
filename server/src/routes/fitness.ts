@@ -302,3 +302,128 @@ fitnessRouter.delete(
     res.status(204).end();
   })
 );
+
+// Goals — a lift, a time over a distance, or a body weight or body fat figure.
+// The client works out progress and projected dates from the logged data; the
+// server keeps each goal's definition tidy.
+const goalDates = {
+  deadline: z.coerce.date().nullable().optional(),
+  // The day it was set (calendar day, midnight UTC). Only used on create.
+  startDate: z.coerce.date().optional(),
+};
+const goalInput = z
+  .discriminatedUnion("type", [
+    z.object({
+      type: z.literal("strength"),
+      exercise: z.string().trim().min(1).max(60),
+      weightKg: z.number().positive().max(1000).nullable(), // null for a bodyweight move
+      reps: z.number().int().min(1).max(1000),
+      ...goalDates,
+    }),
+    z.object({
+      type: z.literal("cardio"),
+      kind: z.enum(["run", "cycle", "swim", "walk"]),
+      distanceKm: z.number().positive().max(1000),
+      timeSec: z.number().int().min(1).max(7 * 24 * 60 * 60),
+      ...goalDates,
+    }),
+    z.object({
+      type: z.literal("body"),
+      measure: z.enum(["weight", "bodyFat"]),
+      target: z.number().positive(),
+      ...goalDates,
+    }),
+  ])
+  .superRefine((g, ctx) => {
+    if (g.type !== "body") return;
+    const [lo, hi] = g.measure === "weight" ? [20, 400] : [2, 75];
+    if (g.target < lo || g.target > hi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["target"],
+        message: g.measure === "weight" ? "Enter a weight between 20 and 400 kg." : "Body fat should be between 2 and 75%.",
+      });
+    }
+  });
+type GoalInput = z.infer<typeof goalInput>;
+
+/** Every column, so switching a goal's type clears the fields it no longer uses. */
+function goalFields(g: GoalInput) {
+  return {
+    type: g.type,
+    exercise: g.type === "strength" ? g.exercise : null,
+    weightKg: g.type === "strength" ? g.weightKg : null,
+    reps: g.type === "strength" ? g.reps : null,
+    kind: g.type === "cardio" ? g.kind : null,
+    distanceKm: g.type === "cardio" ? g.distanceKm : null,
+    timeSec: g.type === "cardio" ? g.timeSec : null,
+    measure: g.type === "body" ? g.measure : null,
+    target: g.type === "body" ? g.target : null,
+    deadline: g.deadline ?? null,
+  };
+}
+
+function checkDeadline(deadline: Date | null, startDate: Date) {
+  if (deadline && deadline < startDate) {
+    throw new HttpError(400, "The deadline can't be before the day you set the goal.");
+  }
+}
+
+type GoalRow = Prisma.FitnessGoalGetPayload<object>;
+const shapeGoal = (g: GoalRow) => ({
+  ...g,
+  weightKg: g.weightKg === null ? null : toNumber(g.weightKg),
+  distanceKm: g.distanceKm === null ? null : toNumber(g.distanceKm),
+  target: g.target === null ? null : toNumber(g.target),
+});
+
+fitnessRouter.get(
+  "/goals",
+  asyncHandler(async (req, res) => {
+    const goals = await prisma.fitnessGoal.findMany({
+      where: { userId: getUserId(req) },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json(goals.map(shapeGoal));
+  })
+);
+
+fitnessRouter.post(
+  "/goals",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const data = goalInput.parse(req.body);
+    const now = new Date();
+    const startDate = data.startDate ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    if (startDate.getTime() > Date.now() + DAY_MS) throw new HttpError(400, "A goal can't start in the future.");
+    const fields = goalFields(data);
+    checkDeadline(fields.deadline, startDate);
+    const goal = await prisma.fitnessGoal.create({ data: { ...fields, startDate, userId } });
+    res.status(201).json(shapeGoal(goal));
+  })
+);
+
+// Editing changes the target, never the day it was set.
+fitnessRouter.put(
+  "/goals/:id",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const fields = goalFields(goalInput.parse(req.body));
+    const existing = await prisma.fitnessGoal.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) throw new HttpError(404, "Goal not found");
+    checkDeadline(fields.deadline, existing.startDate);
+    const goal = await prisma.fitnessGoal.update({ where: { id: existing.id }, data: fields });
+    res.json(shapeGoal(goal));
+  })
+);
+
+fitnessRouter.delete(
+  "/goals/:id",
+  asyncHandler(async (req, res) => {
+    const result = await prisma.fitnessGoal.deleteMany({
+      where: { id: req.params.id, userId: getUserId(req) },
+    });
+    if (result.count === 0) throw new HttpError(404, "Goal not found");
+    res.status(204).end();
+  })
+);

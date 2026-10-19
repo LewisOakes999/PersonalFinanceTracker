@@ -626,7 +626,7 @@ export function LogWorkoutModal({
 }
 
 /** One small number box of the duration, with its unit beside it. */
-function DurationBox({
+export function DurationBox({
   label,
   unit,
   placeholder,
