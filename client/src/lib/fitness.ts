@@ -1,4 +1,4 @@
-import type { BodyWeight, IntervalRep, Workout, WorkoutKind } from "../types";
+import type { BodyWeight, IntervalRep, Workout, WorkoutKind, WorkoutSet } from "../types";
 
 // Everything here is pure, so the progress maths can be tested on its own.
 // Dates are calendar days stored as midnight UTC, so all date maths is UTC.
@@ -106,6 +106,7 @@ export interface WeekSummary {
   start: Date;
   workouts: number;
   seconds: number;
+  volume: number; // kg lifted: Σ reps × weight
   /** Distance per cardio kind that week. */
   km: Partial<Record<WorkoutKind, number>>;
 }
@@ -117,6 +118,7 @@ export function weeklySummary(workouts: Workout[], weeks: number, now = new Date
     start: new Date(current - (weeks - 1 - i) * 7 * DAY_MS),
     workouts: 0,
     seconds: 0,
+    volume: 0,
     km: {},
   }));
   for (const w of workouts) {
@@ -125,6 +127,7 @@ export function weeklySummary(workouts: Workout[], weeks: number, now = new Date
     const wk = out[idx];
     wk.workouts++;
     wk.seconds += w.durationSec ?? 0;
+    wk.volume += workoutVolume(w);
     const km = effectiveKm(w);
     if (km) wk.km[w.kind] = (wk.km[w.kind] ?? 0) + km;
   }
@@ -145,6 +148,38 @@ export function streak(summary: WeekSummary[], goal: number): number {
   return n;
 }
 
+// ── Volume ─────────────────────────────────────────────────────────────────
+
+/** Weight moved: reps × weight over every set. Bodyweight sets (0 kg) add nothing. */
+export const setsVolume = (sets: Pick<WorkoutSet, "reps" | "weightKg">[]) =>
+  sets.reduce((s, x) => s + x.reps * x.weightKg, 0);
+
+export const workoutVolume = (w: Pick<Workout, "sets">) => setsVolume(w.sets);
+
+export interface ExerciseVolume {
+  name: string;
+  volume: number;
+  sets: number;
+  reps: number;
+}
+
+/** Each exercise in a workout, in the order first done, with its volume. */
+export function exerciseVolumes(sets: Pick<WorkoutSet, "exercise" | "reps" | "weightKg">[]): ExerciseVolume[] {
+  const byKey = new Map<string, ExerciseVolume>();
+  for (const s of sets) {
+    const key = s.exercise.trim().toLowerCase();
+    const cur = byKey.get(key) ?? { name: s.exercise.trim(), volume: 0, sets: 0, reps: 0 };
+    cur.volume += s.reps * s.weightKg;
+    cur.sets++;
+    cur.reps += s.reps;
+    byKey.set(key, cur);
+  }
+  return [...byKey.values()];
+}
+
+/** "4,250 kg". */
+export const formatVolume = (kg: number) => `${Math.round(kg).toLocaleString("en-GB")} kg`;
+
 // ── Strength ───────────────────────────────────────────────────────────────
 
 /** Estimated one-rep max (Epley). A single is taken at face value. */
@@ -161,6 +196,7 @@ export interface ExerciseSession {
   bestE1rm: number;
   bestReps: number; // most reps in a set (for bodyweight moves)
   volume: number; // Σ reps × weight
+  reps: number; // in all sets
   sets: number;
   pb: boolean; // beat every earlier session (e1RM, or reps for bodyweight moves)
 }
@@ -194,6 +230,7 @@ export function exerciseProgress(workouts: Workout[]): ExerciseProgress[] {
         bestE1rm: 0,
         bestReps: 0,
         volume: 0,
+        reps: 0,
         sets: 0,
         pb: false,
       };
@@ -204,6 +241,7 @@ export function exerciseProgress(workouts: Workout[]): ExerciseProgress[] {
       cur.bestE1rm = Math.max(cur.bestE1rm, e1rm(s.weightKg, s.reps));
       cur.bestReps = Math.max(cur.bestReps, s.reps);
       cur.volume += s.reps * s.weightKg;
+      cur.reps += s.reps;
       cur.sets++;
       perExercise.set(key, cur);
     }
@@ -468,6 +506,8 @@ export function workoutSummary(w: Workout): string {
   if (w.kind === "strength") {
     const exercises = new Set(w.sets.map((s) => s.exercise.trim().toLowerCase())).size;
     parts.push(`${exercises} exercise${exercises === 1 ? "" : "s"}`, `${w.sets.length} set${w.sets.length === 1 ? "" : "s"}`);
+    const volume = workoutVolume(w);
+    if (volume > 0) parts.push(`${formatVolume(volume)} volume`);
     if (w.durationSec) parts.push(formatMinutes(w.durationSec));
   } else if (isIntervalRun(w)) {
     const stats = intervalStats(w.intervals);

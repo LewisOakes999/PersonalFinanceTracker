@@ -9,6 +9,7 @@ import {
   KINDS,
   formatClock,
   formatPace,
+  formatVolume,
   intervalStats,
   intervalStructure,
   isCardio,
@@ -35,6 +36,20 @@ const repRow = (distance = "", sec: number | null = null): RepRow => ({
 const toRepRows = (intervals: IntervalRep[]) =>
   intervals.map((r) => repRow(r.distanceM ? String(r.distanceM) : "", r.durationSec));
 const emptyBlock = (): ExerciseBlock => ({ id: nextId++, name: "", sets: [{ reps: "", weight: "" }] });
+
+/** An exercise's volume (reps × kg) and reps as typed so far, skipping unreadable sets. */
+function blockVolume(b: ExerciseBlock) {
+  let volume = 0;
+  let reps = 0;
+  for (const s of b.sets) {
+    const r = Number(s.reps);
+    const w = s.weight.trim() === "" ? 0 : Number(s.weight);
+    if (!s.reps.trim() || !Number.isFinite(r) || r <= 0 || !Number.isFinite(w) || w < 0) continue;
+    volume += r * w;
+    reps += r;
+  }
+  return { volume, reps };
+}
 
 /** Stored sets (a workout's or a preset's) back into one block per exercise, in order. */
 function toBlocks(w: { kind: WorkoutKind; sets: WorkoutSet[] } | null): ExerciseBlock[] {
@@ -587,16 +602,42 @@ export function LogWorkoutModal({
                     </div>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  // A new set starts as a copy of the last — most sets repeat it.
-                  onClick={() => updateBlock(b.id, (x) => ({ ...x, sets: [...x.sets, { ...x.sets[x.sets.length - 1] }] }))}
-                  className="text-[color:var(--accent-soft)] mt-2 text-xs hover:underline"
-                >
-                  + Add set
-                </button>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    // A new set starts as a copy of the last — most sets repeat it.
+                    onClick={() => updateBlock(b.id, (x) => ({ ...x, sets: [...x.sets, { ...x.sets[x.sets.length - 1] }] }))}
+                    className="text-[color:var(--accent-soft)] text-xs hover:underline"
+                  >
+                    + Add set
+                  </button>
+                  {(() => {
+                    const v = blockVolume(b);
+                    if (v.reps === 0) return null;
+                    return (
+                      <span className="text-glass-3 num text-xs">
+                        {v.volume > 0 ? (
+                          <>
+                            volume <span className="text-glass">{formatVolume(v.volume)}</span>
+                          </>
+                        ) : (
+                          `${v.reps} reps`
+                        )}
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             ))}
+            {(() => {
+              const total = blocks.reduce((sum, b) => sum + blockVolume(b).volume, 0);
+              return total > 0 ? (
+                <p className="text-glass-3 num flex justify-between border-t border-white/10 pt-2 text-sm">
+                  <span>Total volume</span>
+                  <span className="text-glass font-medium">{formatVolume(total)}</span>
+                </p>
+              ) : null;
+            })()}
             <Button type="button" className="inline-flex items-center gap-1.5" onClick={() => setBlocks((bs) => [...bs, emptyBlock()])}>
               <Plus size={13} strokeWidth={2} /> Add exercise
             </Button>

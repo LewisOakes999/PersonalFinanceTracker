@@ -32,6 +32,7 @@ import {
   formatMetres,
   formatMinutes,
   formatPace,
+  formatVolume,
   intervalSessions,
   isIntervalRun,
   kindInfo,
@@ -374,9 +375,12 @@ function Overview({
     );
   }
 
+  const lastWeek = weeks.length > 1 ? weeks[weeks.length - 2] : null;
+  const anyVolume = weeks.some((w) => w.volume > 0);
   const chart = weeks.map((w, i) => ({
     label: shortDate(w.start),
     workouts: w.workouts,
+    volume: Math.round(w.volume),
     minutes: Math.round(w.seconds / 60),
     hit: w.workouts >= goal,
     current: i === weeks.length - 1,
@@ -410,61 +414,105 @@ function Overview({
         />
       </div>
 
-      <Tile className="p-[22px]">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
-            Weekly Consistency (last 12 weeks)
-          </h2>
-          <label className="text-glass-3 flex items-center gap-2 text-[12px]">
-            Weekly goal
-            <select
-              value={goal}
-              onChange={(e) => onGoal(Number(e.target.value))}
-              className="num py-1 text-[12px]"
-              aria-label="Workouts per week goal"
-            >
-              {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n} a week
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
-              <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
-              <YAxis stroke={AXIS} fontSize={12} tickLine={false} allowDecimals={false} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                cursor={{ fill: "rgba(255,255,255,0.05)" }}
-                formatter={(v: number, _n, item) => [
-                  `${v} workout${v === 1 ? "" : "s"}${item.payload.minutes ? ` · ${formatMinutes(item.payload.minutes * 60)}` : ""}`,
-                  `Week of ${item.payload.label}`,
-                ]}
-                labelFormatter={() => ""}
-              />
-              <ReferenceLine
-                y={goal}
-                stroke={MUTED}
-                strokeDasharray="5 4"
-                label={{ value: "goal", position: "insideTopRight", fill: MUTED, fontSize: 11 }}
-              />
-              <Bar dataKey="workouts" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                {chart.map((d) => (
-                  <Cell key={d.label} fill={BAR} fillOpacity={d.hit ? 1 : d.current ? 0.55 : 0.3} />
+      <div className={anyVolume ? "grid grid-cols-1 gap-4 xl:grid-cols-2" : ""}>
+        <Tile className="p-[22px]">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+              Weekly Consistency (last 12 weeks)
+            </h2>
+            <label className="text-glass-3 flex items-center gap-2 text-[12px]">
+              Weekly goal
+              <select
+                value={goal}
+                onChange={(e) => onGoal(Number(e.target.value))}
+                className="num py-1 text-[12px]"
+                aria-label="Workouts per week goal"
+              >
+                {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n} a week
+                  </option>
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="text-glass-3 mt-2 text-[11px]">
-          Solid weeks hit your goal; faded ones fell short. The current week is still in progress, so it
-          never breaks your streak.
-        </p>
-      </Tile>
+              </select>
+            </label>
+          </div>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+                <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
+                <YAxis stroke={AXIS} fontSize={12} tickLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                  formatter={(v: number, _n, item) => [
+                    `${v} workout${v === 1 ? "" : "s"}${item.payload.minutes ? ` · ${formatMinutes(item.payload.minutes * 60)}` : ""}`,
+                    `Week of ${item.payload.label}`,
+                  ]}
+                  labelFormatter={() => ""}
+                />
+                <ReferenceLine
+                  y={goal}
+                  stroke={MUTED}
+                  strokeDasharray="5 4"
+                  label={{ value: "goal", position: "insideTopRight", fill: MUTED, fontSize: 11 }}
+                />
+                <Bar dataKey="workouts" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  {chart.map((d) => (
+                    <Cell key={d.label} fill={BAR} fillOpacity={d.hit ? 1 : d.current ? 0.55 : 0.3} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-glass-3 mt-2 text-[11px]">
+            Solid weeks hit your goal; faded ones fell short. The current week is still in progress, so it
+            never breaks your streak.
+          </p>
+        </Tile>
+
+        {anyVolume && (
+          <Tile className="p-[22px]">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-glass-2 text-[13px] font-semibold uppercase tracking-[0.06em]">Weekly Volume</h2>
+              <span className="text-glass-3 num text-[12px]">
+                this week <span className="text-glass font-medium">{formatVolume(thisWeek.volume)}</span>
+                {lastWeek && ` · last ${formatVolume(lastWeek.volume)}`}
+              </span>
+            </div>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+                  <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis
+                    stroke={AXIS}
+                    fontSize={12}
+                    tickLine={false}
+                    width={56}
+                    allowDecimals={false}
+                    tickFormatter={(v: number) => (v >= 1000 ? `${parseFloat((v / 1000).toFixed(1))}k` : `${v}`)}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    formatter={(v: number, _n, item) => [formatVolume(v), `Week of ${item.payload.label}`]}
+                    labelFormatter={() => ""}
+                  />
+                  <Bar dataKey="volume" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    {chart.map((d) => (
+                      <Cell key={d.label} fill={BAR} fillOpacity={d.current ? 0.55 : 1} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-glass-3 mt-2 text-[11px]">
+              Weight lifted each week: reps × weight across every set, in kg. The current week is still in progress.
+            </p>
+          </Tile>
+        )}
+      </div>
 
       {goalsTile}
 
@@ -525,6 +573,7 @@ function Overview({
 
 function StrengthView({ progress, onLog }: { progress: ExerciseProgress[]; onLog: () => void }) {
   const [key, setKey] = useState<string | null>(null);
+  const [chartOf, setChartOf] = useState<"strength" | "volume">("strength");
   if (progress.length === 0) {
     return (
       <EmptyState
@@ -545,8 +594,12 @@ function StrengthView({ progress, onLog }: { progress: ExerciseProgress[]; onLog
     top: s.topWeight,
     reps: s.bestReps,
     pb: s.pb,
+    // Volume: reps × weight over every set — or, for a bodyweight move, total reps.
+    volume: ex.bodyweight ? s.reps : Math.round(s.volume),
   }));
   const metric = ex.bodyweight ? "reps" : "e1rm";
+  const biggest = ex.sessions.reduce((b, s) => ((ex.bodyweight ? s.reps : s.volume) > (ex.bodyweight ? b.reps : b.volume) ? s : b));
+  const volumeText = (v: number) => (ex.bodyweight ? `${v} reps` : formatVolume(v));
 
   return (
     <>
@@ -561,9 +614,28 @@ function StrengthView({ progress, onLog }: { progress: ExerciseProgress[]; onLog
               ))}
             </select>
           </Field>
-          <span className="text-glass-3 num text-xs">
-            {ex.sessions.length} session{ex.sessions.length === 1 ? "" : "s"} · last {formatDate(ex.lastDate)}
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-glass-3 num text-xs">
+              {ex.sessions.length} session{ex.sessions.length === 1 ? "" : "s"} · last {formatDate(ex.lastDate)}
+            </span>
+            <div className="flex gap-1" role="radiogroup" aria-label="Chart">
+              {(["strength", "volume"] as const).map((m) => (
+                <button
+                  key={m}
+                  role="radio"
+                  aria-checked={chartOf === m}
+                  onClick={() => setChartOf(m)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    chartOf === m
+                      ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
+                      : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
+                  }`}
+                >
+                  {m === "strength" ? (ex.bodyweight ? "Best set" : "Strength") : "Volume"}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
@@ -608,77 +680,112 @@ function StrengthView({ progress, onLog }: { progress: ExerciseProgress[]; onLog
           />
         </div>
 
-        <div className="h-60">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
-              <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
-              <YAxis
-                stroke={AXIS}
-                fontSize={12}
-                tickLine={false}
-                width={52}
-                allowDecimals={!ex.bodyweight}
-                domain={fittedAxis(chart.flatMap((d) => (ex.bodyweight ? [d.reps] : [d.e1rm, d.top])))?.domain}
-                ticks={fittedAxis(chart.flatMap((d) => (ex.bodyweight ? [d.reps] : [d.e1rm, d.top])))?.ticks}
-                tickFormatter={(v: number) => (ex.bodyweight ? `${v}` : `${v} kg`)}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={(v: number, n: string) => [ex.bodyweight ? `${v} reps` : kg(v), n]}
-              />
-              {!ex.bodyweight && (
-                <Line
-                  type="monotone"
-                  dataKey="top"
-                  name="Heaviest set"
-                  stroke={MUTED}
-                  strokeWidth={1.5}
-                  strokeDasharray="5 4"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              )}
-              <Line
-                type="monotone"
-                dataKey={metric}
-                name={ex.bodyweight ? "Most reps" : "Est. 1-rep max"}
-                stroke={ACCENT}
-                strokeWidth={2.5}
-                isAnimationActive={false}
-                dot={(props: { cx?: number; cy?: number; index?: number }) => {
-                  const pb = props.index !== undefined && chart[props.index]?.pb;
-                  return (
-                    <circle
-                      key={props.index}
-                      cx={props.cx}
-                      cy={props.cy}
-                      r={pb ? 5 : 3}
-                      fill={pb ? PB : ACCENT}
-                      stroke="none"
+        {chartOf === "volume" ? (
+          <>
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+                  <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis
+                    stroke={AXIS}
+                    fontSize={12}
+                    tickLine={false}
+                    width={ex.bodyweight ? 40 : 64}
+                    allowDecimals={false}
+                    tickFormatter={(v: number) => (ex.bodyweight ? `${v}` : formatVolume(v))}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    formatter={(v: number) => [volumeText(v), ex.bodyweight ? "Total reps" : "Volume"]}
+                  />
+                  <Bar dataKey="volume" fill={BAR} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-glass-3 mt-2 text-[11px]">
+              {ex.bodyweight
+                ? "Total reps across every set in each session."
+                : "Volume is reps × weight across every set in each session."}{" "}
+              Most in one session: {volumeText(ex.bodyweight ? biggest.reps : biggest.volume)} on {formatDate(biggest.date)}.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+                  <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis
+                    stroke={AXIS}
+                    fontSize={12}
+                    tickLine={false}
+                    width={52}
+                    allowDecimals={!ex.bodyweight}
+                    domain={fittedAxis(chart.flatMap((d) => (ex.bodyweight ? [d.reps] : [d.e1rm, d.top])))?.domain}
+                    ticks={fittedAxis(chart.flatMap((d) => (ex.bodyweight ? [d.reps] : [d.e1rm, d.top])))?.ticks}
+                    tickFormatter={(v: number) => (ex.bodyweight ? `${v}` : `${v} kg`)}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number, n: string) => [ex.bodyweight ? `${v} reps` : kg(v), n]}
+                  />
+                  {!ex.bodyweight && (
+                    <Line
+                      type="monotone"
+                      dataKey="top"
+                      name="Heaviest set"
+                      stroke={MUTED}
+                      strokeWidth={1.5}
+                      strokeDasharray="5 4"
+                      dot={false}
+                      isAnimationActive={false}
                     />
-                  );
-                }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="text-glass-3 mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px]">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-0.5 w-4 rounded" style={{ background: ACCENT }} />
-            {ex.bodyweight ? "Most reps in a set" : "Estimated 1-rep max (best set)"}
-          </span>
-          {!ex.bodyweight && (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-4 border-t border-dashed" style={{ borderColor: MUTED }} />
-              Heaviest set
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: PB }} />
-            Personal best
-          </span>
-        </div>
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey={metric}
+                    name={ex.bodyweight ? "Most reps" : "Est. 1-rep max"}
+                    stroke={ACCENT}
+                    strokeWidth={2.5}
+                    isAnimationActive={false}
+                    dot={(props: { cx?: number; cy?: number; index?: number }) => {
+                      const pb = props.index !== undefined && chart[props.index]?.pb;
+                      return (
+                        <circle
+                          key={props.index}
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={pb ? 5 : 3}
+                          fill={pb ? PB : ACCENT}
+                          stroke="none"
+                        />
+                      );
+                    }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="text-glass-3 mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-0.5 w-4 rounded" style={{ background: ACCENT }} />
+                {ex.bodyweight ? "Most reps in a set" : "Estimated 1-rep max (best set)"}
+              </span>
+              {!ex.bodyweight && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-4 border-t border-dashed" style={{ borderColor: MUTED }} />
+                  Heaviest set
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: PB }} />
+                Personal best
+              </span>
+            </div>
+          </>
+        )}
       </Tile>
 
       <Tile className="p-[22px]">

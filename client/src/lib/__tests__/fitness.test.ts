@@ -7,9 +7,11 @@ import {
   e1rm,
   effectiveKm,
   exerciseProgress,
+  exerciseVolumes,
   formatClock,
   formatMetres,
   formatMinutes,
+  formatVolume,
   intervalSessions,
   intervalStats,
   intervalStructure,
@@ -18,12 +20,14 @@ import {
   joinDuration,
   paceLabel,
   repBests,
+  setsVolume,
   splitDuration,
   streak,
   weekStart,
   weeklySummary,
   weightChange,
   workoutSummary,
+  workoutVolume,
 } from "../fitness";
 
 const iso = (d: string) => `${d}T00:00:00.000Z`;
@@ -273,11 +277,40 @@ describe("body weight", () => {
   });
 });
 
+describe("volume", () => {
+  const ss = [...sets("Bench press", [10, 20], [8, 25]), ...sets("Pull-ups", [10, 0]), ...sets("bench press", [5, 30])];
+
+  it("is reps × weight, with bodyweight sets adding nothing", () => {
+    expect(setsVolume(sets("Squat", [10, 20]))).toBe(200);
+    expect(workoutVolume({ sets: ss })).toBe(10 * 20 + 8 * 25 + 5 * 30);
+  });
+
+  it("splits a workout by exercise, matching names in any case", () => {
+    expect(exerciseVolumes(ss)).toEqual([
+      { name: "Bench press", volume: 550, sets: 3, reps: 23 },
+      { name: "Pull-ups", volume: 0, sets: 1, reps: 10 },
+    ]);
+  });
+
+  it("adds up each week", () => {
+    const weeks = weeklySummary(
+      [workout("2026-10-13", "strength", { sets: ss }), workout("2026-10-14", "run", { distanceKm: 5 })],
+      2,
+      new Date(iso("2026-10-15"))
+    );
+    expect(weeks.map((w) => w.volume)).toEqual([0, 550]);
+  });
+
+  it("formats with thousands", () => {
+    expect(formatVolume(12345.6)).toBe("12,346 kg");
+  });
+});
+
 describe("workoutSummary", () => {
   it("summarises each kind of workout", () => {
     expect(
       workoutSummary(workout("2026-10-01", "strength", { durationSec: 3000, sets: [...sets("Squat", [5, 100], [5, 100]), ...sets("squat", [5, 100]), ...sets("Row", [8, 50])] }))
-    ).toBe("2 exercises · 4 sets · 50 min");
+    ).toBe("2 exercises · 4 sets · 1,900 kg volume · 50 min"); // 3 × 5 × 100 + 8 × 50
     expect(workoutSummary(workout("2026-10-01", "run", { distanceKm: 5, durationSec: 1530 }))).toBe(
       "5.00 km · 25:30 · 5:06 /km"
     );
