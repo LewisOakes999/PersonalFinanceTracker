@@ -232,6 +232,12 @@ export interface WorkoutSet {
   weightKg: number; // 0 for bodyweight moves
 }
 
+/** One rep of an interval run: a distance, a time, or both. */
+export interface IntervalRep {
+  distanceM: number | null;
+  durationSec: number | null;
+}
+
 export interface Workout {
   id: string;
   date: string;
@@ -241,6 +247,8 @@ export interface Workout {
   distanceKm: number | null;
   notes: string | null;
   sets: WorkoutSet[];
+  intervals: IntervalRep[]; // empty unless it's an interval run
+  recoverySec: number | null; // between reps
 }
 
 export interface BodyWeight {
@@ -259,6 +267,8 @@ export interface WorkoutPreset {
   durationSec: number | null;
   distanceKm: number | null;
   sets: WorkoutSet[];
+  intervals: IntervalRep[];
+  recoverySec: number | null;
 }
 
 export interface Totals {

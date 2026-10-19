@@ -1,4 +1,4 @@
-import type { BodyWeight, Workout, WorkoutKind } from "../types";
+import type { BodyWeight, IntervalRep, Workout, WorkoutKind } from "../types";
 
 // Everything here is pure, so the progress maths can be tested on its own.
 // Dates are calendar days stored as midnight UTC, so all date maths is UTC.
@@ -125,7 +125,8 @@ export function weeklySummary(workouts: Workout[], weeks: number, now = new Date
     const wk = out[idx];
     wk.workouts++;
     wk.seconds += w.durationSec ?? 0;
-    if (w.distanceKm) wk.km[w.kind] = (wk.km[w.kind] ?? 0) + w.distanceKm;
+    const km = effectiveKm(w);
+    if (km) wk.km[w.kind] = (wk.km[w.kind] ?? 0) + km;
   }
   return out;
 }
@@ -264,9 +265,11 @@ export function cardioSessions(workouts: Workout[], kind: WorkoutKind): CardioSe
       date: w.date,
       workoutId: w.id,
       title: w.title,
-      km: w.distanceKm,
+      km: effectiveKm(w),
       sec: w.durationSec,
-      pace: paceValue(kind, w.distanceKm, w.durationSec),
+      // An interval run's overall pace includes its recoveries, so it isn't
+      // comparable with steady runs — its reps are tracked separately.
+      pace: isIntervalRun(w) ? null : paceValue(kind, w.distanceKm, w.durationSec),
     }));
 }
 
@@ -282,21 +285,155 @@ export function cardioBests(sessions: CardioSession[], kind: WorkoutKind) {
   return { longest, fastest };
 }
 
+// ── Interval runs ──────────────────────────────────────────────────────────
+
+/** A run logged as reps rather than one steady effort. */
+export const isIntervalRun = (w: { kind: WorkoutKind; intervals?: IntervalRep[] }) =>
+  w.kind === "run" && (w.intervals?.length ?? 0) > 0;
+
+/** Distance covered: the total if one was entered, otherwise the reps added up. */
+export function effectiveKm(w: Pick<Workout, "distanceKm" | "intervals">): number | null {
+  if (w.distanceKm) return w.distanceKm;
+  const metres = (w.intervals ?? []).reduce((s, r) => s + (r.distanceM ?? 0), 0);
+  return metres > 0 ? metres / 1000 : null;
+}
+
+/** "400 m", "1 km", "1.5 km". */
+export function formatMetres(m: number): string {
+  return m < 1000 ? `${m} m` : `${parseFloat((m / 1000).toFixed(2))} km`;
+}
+
+/**
+ * A session's shape at a glance: "6 × 800 m", "8 × 2:00", a pyramid as
+ * "200–400–600–400–200 m", or "5 reps" when distances and times are mixed.
+ */
+export function intervalStructure(reps: IntervalRep[]): string {
+  const n = reps.length;
+  if (n === 0) return "";
+  const dists = reps.map((r) => r.distanceM);
+  if (dists.every((d) => d !== null)) {
+    const ds = dists as number[];
+    if (ds.every((d) => d === ds[0])) return `${n} × ${formatMetres(ds[0])}`;
+    return ds.every((d) => d < 1000) ? `${ds.join("–")} m` : ds.map(formatMetres).join("–");
+  }
+  const times = reps.map((r) => r.durationSec);
+  if (dists.every((d) => d === null) && times.every((t) => t === times[0])) {
+    return `${n} × ${formatClock(times[0]!)}`;
+  }
+  return `${n} reps`;
+}
+
+/** Sessions compare like for like: the same reps in the same order. */
+export const structureKey = (reps: IntervalRep[]) =>
+  reps.map((r) => (r.distanceM !== null ? `${r.distanceM}m` : `${r.durationSec}s`)).join(",");
+
+export interface IntervalStats {
+  avgRepSec: number | null; // mean time of the reps that were timed
+  avgPace: number | null; // seconds per km across reps with a distance and a time
+  fastest: number | null; // index of the quickest rep
+  slowest: number | null;
+  spreadPace: number | null; // slowest − fastest rep pace (s/km): how evenly you paced it
+}
+
+/** Pace when a rep has a distance and a time; otherwise there's nothing to compare. */
+const repPace = (r: IntervalRep) =>
+  r.distanceM && r.durationSec ? r.durationSec / (r.distanceM / 1000) : null;
+
+export function intervalStats(reps: IntervalRep[]): IntervalStats {
+  const timed = reps.filter((r) => r.durationSec);
+  const paced = reps.filter((r) => repPace(r) !== null);
+  // Reps rank by pace, which is fair across a pyramid. Time-only efforts
+  // (8 × 2 min) have no speed to compare, and identical reps no fastest one.
+  let fastest: number | null = null;
+  let slowest: number | null = null;
+  reps.forEach((r, i) => {
+    const v = repPace(r);
+    if (v === null) return;
+    if (fastest === null || v < repPace(reps[fastest])!) fastest = i;
+    if (slowest === null || v > repPace(reps[slowest])!) slowest = i;
+  });
+  if (fastest !== null && repPace(reps[fastest]) === repPace(reps[slowest!])) fastest = slowest = null;
+  const paces = paced.map((r) => repPace(r)!);
+  const metres = paced.reduce((s, r) => s + r.distanceM!, 0);
+  const secs = paced.reduce((s, r) => s + r.durationSec!, 0);
+  return {
+    avgRepSec: timed.length ? timed.reduce((s, r) => s + r.durationSec!, 0) / timed.length : null,
+    avgPace: paced.length ? secs / (metres / 1000) : null,
+    fastest,
+    slowest,
+    spreadPace: paces.length >= 2 ? Math.max(...paces) - Math.min(...paces) : null,
+  };
+}
+
+export interface IntervalSession {
+  workoutId: string;
+  date: string;
+  title: string;
+  reps: IntervalRep[];
+  recoverySec: number | null;
+  structure: string;
+  key: string;
+  stats: IntervalStats;
+  pb: boolean; // beat every earlier session of the same shape
+}
+
+/** Interval runs, oldest first, each flagged if it beat earlier ones of the same shape. */
+export function intervalSessions(workouts: Workout[]): IntervalSession[] {
+  const best = new Map<string, number>();
+  return workouts
+    .filter(isIntervalRun)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((w) => {
+      const stats = intervalStats(w.intervals);
+      const key = structureKey(w.intervals);
+      // Faster means a lower average pace — or average rep time for time-only reps.
+      const score = stats.avgPace ?? stats.avgRepSec;
+      const prev = best.get(key);
+      const pb = score !== null && prev !== undefined && score < prev;
+      if (score !== null && (prev === undefined || score < prev)) best.set(key, score);
+      return {
+        workoutId: w.id,
+        date: w.date,
+        title: w.title,
+        reps: w.intervals,
+        recoverySec: w.recoverySec,
+        structure: intervalStructure(w.intervals),
+        key,
+        stats,
+        pb,
+      };
+    });
+}
+
+/** Fastest single rep at each distance run, shortest distance first. */
+export function repBests(workouts: Workout[]) {
+  const best = new Map<number, { sec: number; date: string; workoutId: string }>();
+  for (const w of workouts) {
+    if (!isIntervalRun(w)) continue;
+    for (const r of w.intervals) {
+      if (!r.distanceM || !r.durationSec) continue;
+      const cur = best.get(r.distanceM);
+      if (!cur || r.durationSec < cur.sec) best.set(r.distanceM, { sec: r.durationSec, date: w.date, workoutId: w.id });
+    }
+  }
+  return [...best.entries()].sort((a, b) => a[0] - b[0]).map(([distanceM, b]) => ({ distanceM, ...b }));
+}
+
 // ── Body weight ────────────────────────────────────────────────────────────
 
-type Pick = (p: BodyWeight) => number | null | undefined;
-const byWeight: Pick = (p) => p.weightKg;
-export const byBodyFat: Pick = (p) => p.bodyFatPct;
+type Measure = (p: BodyWeight) => number | null | undefined;
+const byWeight: Measure = (p) => p.weightKg;
+export const byBodyFat: Measure = (p) => p.bodyFatPct;
 
 /** Weigh-ins that recorded the measure, with its value. */
-const measured = (points: BodyWeight[], pick: Pick) =>
+const measured = (points: BodyWeight[], pick: Measure) =>
   points.flatMap((p) => {
     const v = pick(p);
     return v === null || v === undefined ? [] : [{ date: p.date, v }];
   });
 
 /** Trailing average over the last `window` readings, to smooth day-to-day noise. */
-export function movingAverage(points: BodyWeight[], window = 7, pick: Pick = byWeight): number[] {
+export function movingAverage(points: BodyWeight[], window = 7, pick: Measure = byWeight): number[] {
   const vals = measured(points, pick).map((m) => m.v);
   return vals.map((_, i) => {
     const slice = vals.slice(Math.max(0, i - window + 1), i + 1);
@@ -309,7 +446,7 @@ export function movingAverage(points: BodyWeight[], window = 7, pick: Pick = byW
  * Null when there's no reading that far back to compare against. Weight by
  * default; pass `byBodyFat` for body fat (in percentage points).
  */
-export function weightChange(points: BodyWeight[], days: number, pick: Pick = byWeight): number | null {
+export function weightChange(points: BodyWeight[], days: number, pick: Measure = byWeight): number | null {
   const ms = measured(points, pick);
   if (ms.length < 2) return null;
   const latest = ms[ms.length - 1];
@@ -332,6 +469,11 @@ export function workoutSummary(w: Workout): string {
     const exercises = new Set(w.sets.map((s) => s.exercise.trim().toLowerCase())).size;
     parts.push(`${exercises} exercise${exercises === 1 ? "" : "s"}`, `${w.sets.length} set${w.sets.length === 1 ? "" : "s"}`);
     if (w.durationSec) parts.push(formatMinutes(w.durationSec));
+  } else if (isIntervalRun(w)) {
+    const stats = intervalStats(w.intervals);
+    parts.push(intervalStructure(w.intervals));
+    if (stats.avgRepSec !== null) parts.push(`avg ${formatClock(stats.avgRepSec)}`);
+    if (stats.avgPace !== null) parts.push(formatPace("run", stats.avgPace));
   } else if (isCardio(w.kind)) {
     if (w.distanceKm) parts.push(`${w.distanceKm.toFixed(2)} km`);
     if (w.durationSec) parts.push(formatClock(w.durationSec));

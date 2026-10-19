@@ -27,6 +27,23 @@ const setsInput = z
   .max(300)
   .default([]);
 
+// An interval run's reps in order: a distance, a time, or both (e.g. 800 m in
+// 3:05, or a 2-minute effort). The recovery between reps applies to them all.
+const intervalsInput = z
+  .array(
+    z
+      .object({
+        distanceM: z.number().int().min(1).max(100_000).nullable(),
+        durationSec: z.number().int().min(1).max(24 * 60 * 60).nullable(),
+      })
+      .refine((r) => r.distanceM !== null || r.durationSec !== null, {
+        message: "Each rep needs a distance or a time.",
+      })
+  )
+  .max(100)
+  .default([]);
+const recoveryInput = z.number().int().min(1).max(60 * 60).nullable().optional();
+
 const workoutInput = z.object({
   date: z.coerce.date(),
   kind: z.enum(WORKOUT_KINDS),
@@ -35,6 +52,8 @@ const workoutInput = z.object({
   distanceKm: z.number().positive().max(1000).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
   sets: setsInput,
+  intervals: intervalsInput,
+  recoverySec: recoveryInput,
 });
 type WorkoutInput = z.infer<typeof workoutInput>;
 
@@ -56,7 +75,18 @@ function normalise(data: WorkoutInput) {
     distanceKm: DISTANCE_KINDS.has(data.kind) ? (data.distanceKm ?? null) : null,
     notes: data.notes || null,
     sets: strength ? data.sets : [],
+    ...intervalFields(data),
   };
+}
+
+/** Reps belong to runs only; recovery only means something with reps. */
+function intervalFields(data: {
+  kind: Kind;
+  intervals: z.infer<typeof intervalsInput>;
+  recoverySec?: number | null;
+}) {
+  const intervals = data.kind === "run" ? data.intervals : [];
+  return { intervals, recoverySec: intervals.length > 0 ? (data.recoverySec ?? null) : null };
 }
 
 const include = { sets: { orderBy: { position: "asc" as const } } };
@@ -215,6 +245,8 @@ const presetInput = z.object({
   durationSec: z.number().int().min(1).max(24 * 60 * 60).nullable().optional(),
   distanceKm: z.number().positive().max(1000).nullable().optional(),
   sets: setsInput,
+  intervals: intervalsInput,
+  recoverySec: recoveryInput,
 });
 
 type PresetRow = Prisma.WorkoutPresetGetPayload<object>;
@@ -249,6 +281,7 @@ fitnessRouter.post(
       durationSec: data.durationSec ?? null,
       distanceKm: DISTANCE_KINDS.has(data.kind) ? (data.distanceKm ?? null) : null,
       sets: strength ? data.sets : [],
+      ...intervalFields(data),
     };
     const preset = await prisma.workoutPreset.upsert({
       where: { userId_name: { userId, name: data.name } },

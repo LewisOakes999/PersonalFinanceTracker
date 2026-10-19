@@ -347,6 +347,10 @@ model Workout {
   distanceKm  Decimal?     @db.Decimal(8, 3)
   notes       String?
   sets        WorkoutSet[]
+  // Interval runs: the reps in order, [{ distanceM, durationSec }] (either may
+  // be null, not both), and the recovery between them. Empty for a steady run.
+  intervals   Json         @default("[]")
+  recoverySec Int?
   createdAt   DateTime     @default(now())
 
   @@index([userId, date])
@@ -378,6 +382,8 @@ model WorkoutPreset {
   durationSec Int?
   distanceKm  Decimal? @db.Decimal(8, 3)
   sets        Json     @default("[]")
+  intervals   Json     @default("[]")
+  recoverySec Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

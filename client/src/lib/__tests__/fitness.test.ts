@@ -1,17 +1,23 @@
 import { describe, it, expect } from "vitest";
-import type { BodyWeight, Workout, WorkoutKind, WorkoutSet } from "../../types";
+import type { BodyWeight, IntervalRep, Workout, WorkoutKind, WorkoutSet } from "../../types";
 import {
   byBodyFat,
   cardioBests,
   cardioSessions,
   e1rm,
+  effectiveKm,
   exerciseProgress,
   formatClock,
+  formatMetres,
   formatMinutes,
+  intervalSessions,
+  intervalStats,
+  intervalStructure,
   leanMassKg,
   movingAverage,
   joinDuration,
   paceLabel,
+  repBests,
   splitDuration,
   streak,
   weekStart,
@@ -31,6 +37,8 @@ const workout = (date: string, kind: WorkoutKind, extra: Partial<Workout> = {}):
   distanceKm: null,
   notes: null,
   sets: [],
+  intervals: [],
+  recoverySec: null,
   ...extra,
 });
 const sets = (exercise: string, ...pairs: [number, number][]): WorkoutSet[] =>
@@ -273,5 +281,96 @@ describe("workoutSummary", () => {
       "5.00 km · 25:30 · 5:06 /km"
     );
     expect(workoutSummary(workout("2026-10-01", "class", { durationSec: 3600 }))).toBe("1 h");
+  });
+});
+
+describe("interval runs", () => {
+  const rep = (distanceM: number | null, durationSec: number | null): IntervalRep => ({ distanceM, durationSec });
+  const reps = (n: number, m: number, ...times: number[]): IntervalRep[] =>
+    Array.from({ length: n }, (_, i) => rep(m, times[i] ?? null));
+
+  it("names a session by its shape", () => {
+    expect(intervalStructure(reps(6, 800))).toBe("6 × 800 m");
+    expect(intervalStructure(reps(4, 1000))).toBe("4 × 1 km");
+    expect(intervalStructure([200, 400, 600, 400, 200].map((m) => rep(m, null)))).toBe("200–400–600–400–200 m");
+    expect(intervalStructure([rep(1000, null), rep(2000, null)])).toBe("1 km–2 km");
+    expect(intervalStructure(Array.from({ length: 8 }, () => rep(null, 120)))).toBe("8 × 2:00");
+    expect(intervalStructure([rep(400, null), rep(null, 60)])).toBe("2 reps");
+    expect(formatMetres(1500)).toBe("1.5 km");
+  });
+
+  it("averages the reps and finds the fastest and slowest", () => {
+    const s = intervalStats(reps(4, 800, 185, 183, 188, 180));
+    expect(s.avgRepSec).toBe(184);
+    expect(s.avgPace).toBe(230); // 736 s over 3.2 km
+    expect([s.fastest, s.slowest]).toEqual([3, 2]);
+    expect(s.spreadPace).toBeCloseTo((188 - 180) / 0.8, 6);
+  });
+
+  it("ranks a pyramid by pace, not raw time", () => {
+    // 400 in 80 (3:20/km) is quicker than 200 in 42 (3:30/km), though slower in time
+    const s = intervalStats([rep(200, 42), rep(400, 80), rep(200, 41)]);
+    expect(s.fastest).toBe(1);
+    expect(s.slowest).toBe(0);
+  });
+
+  it("handles time-only reps and untimed reps", () => {
+    const t = intervalStats(Array.from({ length: 3 }, (_, i) => rep(null, 120 + i)));
+    expect(t.avgRepSec).toBe(121);
+    expect(t.avgPace).toBeNull();
+    expect(t.fastest).toBeNull(); // no distance, so no speed to rank by
+    const u = intervalStats(reps(3, 800));
+    expect([u.avgRepSec, u.avgPace, u.fastest, u.spreadPace]).toEqual([null, null, null, null]);
+  });
+
+  it("names no fastest rep when every rep was the same", () => {
+    const s = intervalStats(reps(4, 400, 80, 80, 80, 80));
+    expect([s.fastest, s.slowest, s.spreadPace]).toEqual([null, null, 0]);
+  });
+
+  const run = (date: string, intervals: IntervalRep[], extra: Partial<Workout> = {}) =>
+    workout(date, "run", { intervals, ...extra });
+
+  it("flags a session that beats earlier ones of the same shape only", () => {
+    const sessions = intervalSessions([
+      run("2026-09-01", reps(6, 800, 190, 190, 190, 190, 190, 190)),
+      run("2026-09-08", reps(4, 400, 85, 85, 85, 85)), // different shape: never compared
+      run("2026-09-15", reps(6, 800, 186, 186, 186, 186, 186, 186)),
+      run("2026-09-22", reps(6, 800, 188, 188, 188, 188, 188, 188)),
+    ]);
+    expect(sessions.map((s) => s.structure)).toEqual(["6 × 800 m", "4 × 400 m", "6 × 800 m", "6 × 800 m"]);
+    expect(sessions.map((s) => s.pb)).toEqual([false, false, true, false]);
+  });
+
+  it("keeps the fastest rep at each distance", () => {
+    const bests = repBests([
+      run("2026-09-01", [rep(400, 84), rep(800, 182)]),
+      run("2026-09-08", [rep(400, 82), rep(800, 185), rep(null, 60)]),
+    ]);
+    expect(bests.map((b) => [b.distanceM, b.sec, b.date.slice(0, 10)])).toEqual([
+      [400, 82, "2026-09-08"],
+      [800, 182, "2026-09-01"],
+    ]);
+  });
+
+  it("counts reps as distance when no total was entered", () => {
+    expect(effectiveKm(run("2026-09-01", reps(6, 800)))).toBe(4.8);
+    expect(effectiveKm(run("2026-09-01", reps(6, 800), { distanceKm: 7 }))).toBe(7); // total incl. warm-up wins
+    const weeks = weeklySummary([run("2026-10-13", reps(6, 800))], 1, new Date(iso("2026-10-14")));
+    expect(weeks[0].km.run).toBe(4.8);
+  });
+
+  it("keeps interval runs out of steady-run pace", () => {
+    const ws = [
+      workout("2026-09-01", "run", { distanceKm: 5, durationSec: 1500 }),
+      run("2026-09-02", reps(6, 800, 180, 180, 180, 180, 180, 180), { distanceKm: 8, durationSec: 2400 }),
+    ];
+    const sessions = cardioSessions(ws, "run");
+    expect(sessions.map((x) => x.pace)).toEqual([300, null]);
+    expect(cardioBests(sessions, "run").longest!.km).toBe(8); // still counts for distance
+  });
+
+  it("summarises an interval run by its reps", () => {
+    expect(workoutSummary(run("2026-09-01", reps(2, 800, 184, 186)))).toBe("2 × 800 m · avg 3:05 · 3:51 /km");
   });
 });

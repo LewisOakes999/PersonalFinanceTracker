@@ -2,11 +2,15 @@ import { useId, useMemo, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { BookmarkPlus, Plus, X } from "lucide-react";
 import { api } from "../api/client";
-import type { Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
+import type { IntervalRep, Workout, WorkoutKind, WorkoutPreset, WorkoutSet } from "../types";
 import { toast } from "../lib/toast";
 import { Button, Field, Modal } from "./ui";
 import {
   KINDS,
+  formatClock,
+  formatPace,
+  intervalStats,
+  intervalStructure,
   isCardio,
   joinDuration,
   kindInfo,
@@ -19,7 +23,17 @@ import { KIND_ICONS } from "../lib/fitnessIcons";
 type SetRow = { reps: string; weight: string };
 type ExerciseBlock = { id: number; name: string; sets: SetRow[] };
 
+type RepRow = { id: number; distance: string; m: string; s: string };
+
 let nextId = 1;
+const repRow = (distance = "", sec: number | null = null): RepRow => ({
+  id: nextId++,
+  distance,
+  m: sec ? String(Math.floor(sec / 60)) : "",
+  s: sec ? String(sec % 60) : "",
+});
+const toRepRows = (intervals: IntervalRep[]) =>
+  intervals.map((r) => repRow(r.distanceM ? String(r.distanceM) : "", r.durationSec));
 const emptyBlock = (): ExerciseBlock => ({ id: nextId++, name: "", sets: [{ reps: "", weight: "" }] });
 
 /** Stored sets (a workout's or a preset's) back into one block per exercise, in order. */
@@ -59,6 +73,16 @@ export function LogWorkoutModal({
   );
   const [title, setTitle] = useState(workout?.title ?? "");
   const [distance, setDistance] = useState(workout?.distanceKm ? String(workout.distanceKm) : "");
+  // Interval runs: reps rather than one steady effort.
+  const [runMode, setRunMode] = useState<"steady" | "intervals">(
+    workout && workout.intervals.length > 0 ? "intervals" : "steady"
+  );
+  const [reps, setReps] = useState<RepRow[]>(() => toRepRows(workout?.intervals ?? []));
+  const [recovery, setRecovery] = useState<DurationParts>(() =>
+    splitDuration(workout?.recoverySec ?? null, true)
+  );
+  const [quickCount, setQuickCount] = useState("6");
+  const [quickDistance, setQuickDistance] = useState("800");
   const [notes, setNotes] = useState(workout?.notes ?? "");
   const [blocks, setBlocks] = useState<ExerciseBlock[]>(() => toBlocks(workout));
   const [error, setError] = useState("");
@@ -76,6 +100,20 @@ export function LogWorkoutModal({
   const seconds = joinDuration({ ...dur, s: cardio ? dur.s : "" });
   const durationLabelId = useId();
   const km = distance.trim() === "" ? null : Number(distance);
+  const intervalMode = kind === "run" && runMode === "intervals";
+  // Rows as reps: untouched rows are skipped; NaN marks something unreadable.
+  const parsedReps = reps
+    .filter((r) => r.distance.trim() || r.m.trim() || r.s.trim())
+    .map((r) => ({
+      distanceM: r.distance.trim() === "" ? null : Number(r.distance),
+      durationSec: joinDuration({ h: "", m: r.m, s: r.s }),
+    }));
+  const readableReps = parsedReps.filter(
+    (r) =>
+      (r.distanceM === null || (Number.isInteger(r.distanceM) && r.distanceM > 0)) &&
+      !Number.isNaN(r.durationSec as number)
+  ) as IntervalRep[];
+  const repsKm = readableReps.reduce((sum, r) => sum + (r.distanceM ?? 0), 0) / 1000;
   const pace = isCardio(kind) ? paceLabel(kind, km, seconds !== null && !Number.isNaN(seconds) ? seconds : null) : null;
 
   const updateBlock = (id: number, change: (b: ExerciseBlock) => ExerciseBlock) =>
@@ -141,12 +179,38 @@ export function LogWorkoutModal({
       setError("Enter the distance in km.");
       return null;
     }
+    let intervals: IntervalRep[] = [];
+    let recoverySec: number | null = null;
+    if (intervalMode) {
+      if (parsedReps.length === 0) {
+        setError("Add at least one rep — a distance, a time, or both.");
+        return null;
+      }
+      for (const [i, r] of parsedReps.entries()) {
+        if (r.distanceM !== null && (!Number.isInteger(r.distanceM) || r.distanceM < 1)) {
+          setError(`Rep ${i + 1}: enter the distance in whole metres.`);
+          return null;
+        }
+        if (Number.isNaN(r.durationSec as number)) {
+          setError(`Rep ${i + 1}: enter the time as minutes and seconds.`);
+          return null;
+        }
+      }
+      intervals = parsedReps as IntervalRep[];
+      recoverySec = joinDuration({ h: "", m: recovery.m, s: recovery.s });
+      if (recoverySec !== null && Number.isNaN(recoverySec)) {
+        setError("Enter the recovery as minutes and seconds.");
+        return null;
+      }
+    }
     return {
       kind,
       title: title.trim(),
       durationSec: seconds,
       distanceKm: isCardio(kind) ? km : null,
       sets,
+      intervals,
+      recoverySec,
     };
   };
 
@@ -176,6 +240,9 @@ export function LogWorkoutModal({
     setDur(splitDuration(p.durationSec, isCardio(p.kind)));
     setDistance(p.distanceKm ? String(p.distanceKm) : "");
     setBlocks(toBlocks(p));
+    setRunMode(p.intervals.length > 0 ? "intervals" : "steady");
+    setReps(toRepRows(p.intervals));
+    setRecovery(splitDuration(p.recoverySec, true));
     setApplied(p.id);
     setError("");
   };
@@ -345,21 +412,60 @@ export function LogWorkoutModal({
           <input className="w-full" placeholder={info.placeholder} value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
 
+        {kind === "run" && (
+          <div className="flex gap-1" role="radiogroup" aria-label="Kind of run">
+            {(["steady", "intervals"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={runMode === m}
+                onClick={() => setRunMode(m)}
+                className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  runMode === m
+                    ? "border-[rgb(var(--accent-rgb)/0.6)] bg-[rgb(var(--accent-rgb)/0.18)] text-white"
+                    : "border-white/10 bg-white/5 text-glass-3 hover:text-glass"
+                }`}
+              >
+                {m === "steady" ? "Steady run" : "Intervals"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {intervalMode && (
+          <IntervalsEditor
+            reps={reps}
+            setReps={setReps}
+            recovery={recovery}
+            setRecovery={setRecovery}
+            quickCount={quickCount}
+            setQuickCount={setQuickCount}
+            quickDistance={quickDistance}
+            setQuickDistance={setQuickDistance}
+            summary={readableReps}
+          />
+        )}
+
         {isCardio(kind) && (
           <div className="grid grid-cols-2 items-end gap-3">
-            <Field label="Distance (km)">
+            <Field label={intervalMode ? "Total distance (km, optional)" : "Distance (km)"}>
               <input
                 type="number"
                 step="any"
                 min="0"
                 className="num w-full"
-                placeholder={kind === "swim" ? "e.g. 1.5" : "e.g. 5"}
+                placeholder={
+                  intervalMode ? (repsKm > 0 ? `${parseFloat(repsKm.toFixed(2))} from reps` : "e.g. 8") : kind === "swim" ? "e.g. 1.5" : "e.g. 5"
+                }
                 value={distance}
                 onChange={(e) => setDistance(e.target.value)}
               />
             </Field>
             <div className="text-glass-3 pb-2 text-sm">
-              {pace ? (
+              {intervalMode ? (
+                <span className="text-xs">Include your warm-up and cool-down, or leave blank to count the reps.</span>
+              ) : pace ? (
                 <>
                   Pace <span className="num text-glass">{pace}</span>
                 </>
@@ -548,5 +654,161 @@ function DurationBox({
       />
       <span className="text-glass-3 text-xs">{unit}</span>
     </span>
+  );
+}
+
+/** The reps of an interval run: quick add, one row per rep, and the recovery between them. */
+function IntervalsEditor({
+  reps,
+  setReps,
+  recovery,
+  setRecovery,
+  quickCount,
+  setQuickCount,
+  quickDistance,
+  setQuickDistance,
+  summary,
+}: {
+  reps: RepRow[];
+  setReps: (update: (rows: RepRow[]) => RepRow[]) => void;
+  recovery: DurationParts;
+  setRecovery: (update: (d: DurationParts) => DurationParts) => void;
+  quickCount: string;
+  setQuickCount: (v: string) => void;
+  quickDistance: string;
+  setQuickDistance: (v: string) => void;
+  summary: IntervalRep[];
+}) {
+  const update = (id: number, change: Partial<RepRow>) =>
+    setReps((rows) => rows.map((r) => (r.id === id ? { ...r, ...change } : r)));
+  const quickAdd = () => {
+    const n = Math.min(50, Math.max(1, Math.floor(Number(quickCount)) || 0));
+    if (!Number(quickCount)) return;
+    const d = /^\d+$/.test(quickDistance.trim()) ? quickDistance.trim() : "";
+    setReps((rows) => [...rows, ...Array.from({ length: n }, () => repRow(d))]);
+  };
+  // A new rep repeats the last one's distance — and its time too when the reps
+  // are time-only efforts (8 × 2 min), where every rep is the same.
+  const addRep = () =>
+    setReps((rows) => {
+      const last = rows[rows.length - 1];
+      if (!last) return [repRow()];
+      const timeOnly = last.distance.trim() === "";
+      return [...rows, { ...repRow(last.distance), ...(timeOnly ? { m: last.m, s: last.s } : {}) }];
+    });
+  const stats = intervalStats(summary);
+  const fastest = stats.fastest !== null ? summary[stats.fastest] : null;
+
+  return (
+    <div className="glass-nested space-y-3 rounded-xl p-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-glass-3 text-xs uppercase tracking-wider">Quick add</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          inputMode="numeric"
+          aria-label="Number of reps"
+          className="num w-14 px-2 text-center"
+          value={quickCount}
+          onChange={(e) => setQuickCount(e.target.value)}
+        />
+        <span className="text-glass-3">×</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          inputMode="numeric"
+          aria-label="Distance of each rep in metres"
+          className="num w-20 px-2 text-center"
+          placeholder="m"
+          value={quickDistance}
+          onChange={(e) => setQuickDistance(e.target.value)}
+        />
+        <span className="text-glass-3 text-xs">m</span>
+        <Button type="button" className="ml-auto px-3 py-1.5 text-xs" onClick={quickAdd}>
+          Add reps
+        </Button>
+      </div>
+
+      {reps.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-glass-3 flex gap-2 pl-7 text-[10px] uppercase tracking-wider sm:pl-12">
+            <span className="w-16 sm:w-20">Distance</span>
+            <span>Time</span>
+          </div>
+          {reps.map((r, i) => (
+            <div key={r.id} className="flex items-center gap-2 text-sm">
+              <span className="text-glass-3 num w-5 shrink-0 text-xs sm:w-10">
+                <span className="hidden sm:inline">Rep </span>
+                {i + 1}
+              </span>
+              <span className="flex w-16 shrink-0 items-center gap-1 sm:w-20">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  aria-label={`Rep ${i + 1} distance in metres`}
+                  className="num w-full min-w-0 px-2 text-center"
+                  placeholder="m"
+                  value={r.distance}
+                  onChange={(e) => update(r.id, { distance: e.target.value })}
+                />
+              </span>
+              <DurationBox label={`Rep ${i + 1} minutes`} unit="m" placeholder="0" value={r.m} onChange={(m) => update(r.id, { m })} />
+              <DurationBox label={`Rep ${i + 1} seconds`} unit="s" placeholder="00" value={r.s} onChange={(v) => update(r.id, { s: v })} />
+              <button
+                type="button"
+                onClick={() => setReps((rows) => rows.filter((x) => x.id !== r.id))}
+                className="text-glass-3 hover:text-[#ff6b8a] shrink-0 p-1"
+                aria-label={`Remove rep ${i + 1}`}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={addRep} className="text-[color:var(--accent-soft)] text-xs hover:underline">
+          + Add rep
+        </button>
+        <span className="flex items-center gap-2 text-xs">
+          <span className="text-glass-3">Recovery between reps</span>
+          <span className="flex w-36 items-center gap-2">
+            <DurationBox
+              label="Recovery minutes"
+              unit="m"
+              placeholder="1"
+              value={recovery.m}
+              onChange={(m) => setRecovery((d) => ({ ...d, m }))}
+            />
+            <DurationBox
+              label="Recovery seconds"
+              unit="s"
+              placeholder="30"
+              value={recovery.s}
+              onChange={(v) => setRecovery((d) => ({ ...d, s: v }))}
+            />
+          </span>
+        </span>
+      </div>
+
+      {summary.length > 0 && (
+        <p className="text-glass-3 border-t border-white/10 pt-2 text-xs">
+          <span className="text-glass">{intervalStructure(summary)}</span>
+          {stats.avgRepSec !== null && <> · avg <span className="num text-glass">{formatClock(stats.avgRepSec)}</span></>}
+          {stats.avgPace !== null && <> · <span className="num text-glass">{formatPace("run", stats.avgPace)}</span></>}
+          {fastest?.durationSec && (
+            <>
+              {" "}
+              · fastest rep {stats.fastest! + 1} (<span className="num">{formatClock(fastest.durationSec)}</span>)
+            </>
+          )}
+        </p>
+      )}
+    </div>
   );
 }

@@ -23,17 +23,23 @@ import {
   cardioBests,
   cardioSessions,
   exerciseProgress,
+  formatClock,
+  formatMetres,
   formatMinutes,
   formatPace,
+  intervalSessions,
+  isIntervalRun,
   kindInfo,
   leanMassKg,
   movingAverage,
   paceHigherIsBetter,
+  repBests,
   streak,
   weeklySummary,
   weightChange,
   workoutSummary,
   type ExerciseProgress,
+  type IntervalSession,
 } from "../lib/fitness";
 import { KIND_ICONS } from "../lib/fitnessIcons";
 import { fittedAxis } from "../lib/chart";
@@ -108,6 +114,18 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
         pbs.push(`${paceHigherIsBetter(w.kind) ? "fastest" : "best-paced"} ${label} (${formatPace(w.kind, fastest.pace)})`);
       if (sessions.length > 1 && longest?.workoutId === w.id) pbs.push(`longest ${label} (${longest.km} km)`);
     }
+    // Interval runs: a faster average than any earlier session of the same
+    // shape, or the quickest rep yet at a distance run before.
+    if (isIntervalRun(w)) {
+      const session = intervalSessions(fresh).find((s) => s.workoutId === w.id);
+      if (session?.pb) pbs.push(`${session.structure} (${sessionScore(session)})`);
+      for (const b of repBests(fresh)) {
+        const runBefore = fresh.some(
+          (o) => o.id !== w.id && isIntervalRun(o) && o.intervals.some((r) => r.distanceM === b.distanceM && r.durationSec)
+        );
+        if (b.workoutId === w.id && runBefore) pbs.push(`fastest ${formatMetres(b.distanceM)} rep (${formatClock(b.sec)})`);
+      }
+    }
     if (pbs.length > 0) toast.success(`New PB: ${pbs.join(", ")}`);
     else toast.success(wasEdit ? "Workout updated." : "Workout logged.");
   };
@@ -149,7 +167,12 @@ export default function Fitness({ view = "overview" }: { view?: FitnessView } = 
           workouts={workouts}
           goal={goal}
           onGoal={changeGoal}
-          pbWorkouts={new Set(progress.flatMap((p) => p.sessions.filter((s) => s.pb).map((s) => s.workoutId)))}
+          pbWorkouts={
+            new Set([
+              ...progress.flatMap((p) => p.sessions.filter((s) => s.pb).map((s) => s.workoutId)),
+              ...intervalSessions(workouts).filter((s) => s.pb).map((s) => s.workoutId),
+            ])
+          }
           onLog={() => setEditing("new")}
           onEdit={setEditing}
           onDelete={remove}
@@ -716,8 +739,317 @@ function CardioView({ workouts, onLog }: { workouts: Workout[]; onLog: () => voi
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-glass-3 mt-2 text-[11px]">Higher on the chart is faster.</p>
+              <p className="text-glass-3 mt-2 text-[11px]">
+                Higher on the chart is faster.{kind === "run" && " Interval sessions are tracked below instead."}
+              </p>
             </>
+          )}
+        </Tile>
+      </div>
+
+      {kind === "run" && <IntervalsSection workouts={workouts} onLog={onLog} />}
+    </>
+  );
+}
+
+// ── Interval runs ──────────────────────────────────────────────────────────
+
+/** How a session went, in one figure: average rep pace, or average rep time for timed efforts. */
+function sessionScore(s: IntervalSession): string {
+  if (s.stats.avgPace !== null) return `avg ${formatPace("run", s.stats.avgPace)}`;
+  if (s.stats.avgRepSec !== null) return `avg ${formatClock(s.stats.avgRepSec)}`;
+  return "no times";
+}
+
+function IntervalsSection({ workouts, onLog }: { workouts: Workout[]; onLog: () => void }) {
+  const sessions = useMemo(() => intervalSessions(workouts), [workouts]);
+  const bests = useMemo(() => repBests(workouts), [workouts]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const heading = (
+    <div className="pt-2">
+      <h2 className="text-[19px] font-semibold tracking-tight text-glass">Intervals</h2>
+      <p className="text-glass-3 mt-0.5 text-[13px]">Rep by rep, and how each session shape is coming along.</p>
+    </div>
+  );
+  if (sessions.length === 0) {
+    return (
+      <>
+        {heading}
+        <Tile className="p-[22px]">
+          <p className="text-glass-3 text-sm">
+            Log a run and switch it to <span className="text-glass">Intervals</span> to record each rep (6 × 800 m, a
+            pyramid, or timed efforts). Your reps, averages and fastest splits then show up here.
+          </p>
+          <Button className="mt-4" onClick={onLog}>
+            Log an interval session
+          </Button>
+        </Tile>
+      </>
+    );
+  }
+
+  const newestFirst = [...sessions].reverse();
+  const selected = sessions.find((s) => s.workoutId === selectedId) ?? newestFirst[0];
+  const listed = showAll ? newestFirst : newestFirst.slice(0, 6);
+  const sameShape = sessions.filter((s) => s.key === selected.key);
+
+  // Rep chart: plain times when every rep is the same distance, pace when they
+  // differ (a pyramid), and nothing to plot for reps without both.
+  const timedReps = selected.reps.filter((r) => r.distanceM && r.durationSec);
+  const metric =
+    timedReps.length === 0 ? null : timedReps.every((r) => r.distanceM === timedReps[0].distanceM) ? "time" : "pace";
+  const fmt = (v: number) => (metric === "time" ? formatClock(v) : formatPace("run", v));
+  const repChart = selected.reps.map((r, i) => ({
+    rep: i + 1,
+    value:
+      r.distanceM && r.durationSec ? (metric === "time" ? r.durationSec : r.durationSec / (r.distanceM / 1000)) : null,
+    distanceM: r.distanceM,
+    durationSec: r.durationSec,
+  }));
+  const plotted = repChart.flatMap((d) => (d.value === null ? [] : [d.value]));
+  const repAvg = metric === "time" ? plotted.reduce((a, b) => a + b, 0) / plotted.length : selected.stats.avgPace;
+  const repAxis = fittedAxis(repAvg === null ? plotted : [...plotted, repAvg]);
+  const fastest = selected.stats.fastest;
+
+  const trend = sameShape.map((s) => ({
+    label: shortDate(s.date),
+    value: s.stats.avgPace ?? s.stats.avgRepSec,
+    pb: s.pb,
+    id: s.workoutId,
+  }));
+  const trendIsPace = selected.stats.avgPace !== null;
+  const trendFmt = (v: number) => (trendIsPace ? formatPace("run", v) : formatClock(v));
+  const trendAxis = fittedAxis(trend.flatMap((t) => (t.value === null ? [] : [t.value])));
+
+  return (
+    <>
+      {heading}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Tile className="p-[22px]">
+          <SectionTitle>Sessions</SectionTitle>
+          <ul className="space-y-1">
+            {listed.map((s) => {
+              const on = s.workoutId === selected.workoutId;
+              return (
+                <li key={s.workoutId}>
+                  <button
+                    onClick={() => setSelectedId(s.workoutId)}
+                    aria-pressed={on}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                      on
+                        ? "border-[rgb(var(--accent-rgb)/0.45)] bg-[rgb(var(--accent-rgb)/0.12)]"
+                        : "border-transparent hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2">
+                        <span className="text-glass truncate">{s.structure}</span>
+                        {s.pb && (
+                          <span
+                            className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                            style={{ color: PB, background: "rgba(255,214,10,0.12)" }}
+                          >
+                            PB
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-glass-3 block truncate text-xs">
+                        {formatDate(s.date)}
+                        {s.title && ` · ${s.title}`}
+                      </span>
+                    </span>
+                    <span className="num text-glass-2 shrink-0 text-xs">{sessionScore(s)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {newestFirst.length > listed.length && (
+            <button onClick={() => setShowAll(true)} className="text-[color:var(--accent-soft)] mt-2 text-xs hover:underline">
+              Show all {newestFirst.length} sessions
+            </button>
+          )}
+        </Tile>
+
+        <Tile className="p-[22px]">
+          <SectionTitle>
+            {/* Keep "800 m" from shouting as "800 M". */}
+            <span className="normal-case">{selected.structure}</span> · {shortDate(selected.date)}
+          </SectionTitle>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Metric label="Avg rep" value={selected.stats.avgRepSec !== null ? formatClock(selected.stats.avgRepSec) : "—"} />
+            <Metric
+              label="Avg pace"
+              value={selected.stats.avgPace !== null ? formatPace("run", selected.stats.avgPace) : "—"}
+            />
+            <Metric
+              label="Fastest rep"
+              value={fastest !== null && selected.reps[fastest].durationSec ? formatClock(selected.reps[fastest].durationSec!) : "—"}
+              sub={fastest !== null ? `rep ${fastest + 1}` : undefined}
+              color={fastest !== null ? ACCENT : undefined}
+            />
+            <Metric
+              label="Recovery"
+              value={selected.recoverySec ? formatClock(selected.recoverySec) : "—"}
+              sub={selected.recoverySec ? "between reps" : undefined}
+            />
+          </div>
+          {metric === null ? (
+            <p className="text-glass-3 mt-6 text-sm">
+              Give each rep a distance and a time to compare them rep by rep.
+            </p>
+          ) : (
+            <>
+              <div className="mt-4 h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={repChart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+                    <XAxis dataKey="rep" stroke={AXIS} fontSize={12} tickLine={false} tickFormatter={(r: number) => `R${r}`} />
+                    <YAxis
+                      stroke={AXIS}
+                      fontSize={12}
+                      tickLine={false}
+                      width={metric === "time" ? 48 : 64}
+                      reversed
+                      domain={repAxis?.domain}
+                      ticks={repAxis?.ticks}
+                      tickFormatter={fmt}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      labelFormatter={(r) => `Rep ${r}`}
+                      formatter={(v: number, _n, item) => {
+                        const d = item.payload as (typeof repChart)[number];
+                        return [
+                          metric === "time"
+                            ? `${formatClock(v)} · ${formatPace("run", v / (d.distanceM! / 1000))}`
+                            : `${formatPace("run", v)} · ${formatMetres(d.distanceM!)} in ${formatClock(d.durationSec!)}`,
+                          metric === "time" ? "Time" : "Pace",
+                        ];
+                      }}
+                    />
+                    {repAvg !== null && (
+                      <ReferenceLine
+                        y={repAvg}
+                        stroke={MUTED}
+                        strokeDasharray="5 4"
+                        label={{ value: `avg ${fmt(repAvg)}`, position: "insideTopRight", fill: MUTED, fontSize: 11 }}
+                      />
+                    )}
+                    <Line
+                      type="linear"
+                      dataKey="value"
+                      stroke={ACCENT}
+                      strokeWidth={2}
+                      connectNulls
+                      isAnimationActive={false}
+                      dot={(p: { cx?: number; cy?: number; index: number }) =>
+                        p.cx === undefined || p.cy === undefined ? (
+                          <g key={p.index} />
+                        ) : (
+                          <circle
+                            key={p.index}
+                            cx={p.cx}
+                            cy={p.cy}
+                            r={p.index === fastest ? 5 : 3}
+                            fill={p.index === fastest ? PB : ACCENT}
+                            strokeWidth={0}
+                          />
+                        )
+                      }
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-glass-3 mt-2 text-[11px]">
+                {metric === "time" ? "Each rep's time" : "Each rep's pace"}; higher is faster and the fastest rep is
+                gold.
+                {selected.stats.spreadPace !== null &&
+                  ` Fastest and slowest reps were ${Math.round(selected.stats.spreadPace)} s/km apart. The closer, the more even your pacing.`}
+              </p>
+            </>
+          )}
+        </Tile>
+
+        <Tile className="p-[22px]">
+          <SectionTitle>
+            <span className="normal-case">{selected.structure}</span> over time
+          </SectionTitle>
+          {trend.length < 2 ? (
+            <p className="text-glass-3 py-12 text-center text-sm">
+              Run {selected.structure} again to see whether your {trendIsPace ? "average pace" : "average rep time"} is
+              coming down.
+            </p>
+          ) : (
+            <>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
+                    <XAxis dataKey="label" stroke={AXIS} fontSize={12} tickLine={false} interval="preserveStartEnd" />
+                    <YAxis
+                      stroke={AXIS}
+                      fontSize={12}
+                      tickLine={false}
+                      width={trendIsPace ? 64 : 48}
+                      reversed
+                      domain={trendAxis?.domain}
+                      ticks={trendAxis?.ticks}
+                      tickFormatter={trendFmt}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(v: number) => [trendFmt(v), trendIsPace ? "Average pace" : "Average rep"]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke={ACCENT}
+                      strokeWidth={2.5}
+                      connectNulls
+                      isAnimationActive={false}
+                      dot={(p: { cx?: number; cy?: number; index: number }) =>
+                        p.cx === undefined || p.cy === undefined ? (
+                          <g key={p.index} />
+                        ) : (
+                          <circle
+                            key={p.index}
+                            cx={p.cx}
+                            cy={p.cy}
+                            r={trend[p.index].id === selected.workoutId ? 5 : 3}
+                            fill={trend[p.index].pb ? PB : ACCENT}
+                            strokeWidth={0}
+                          />
+                        )
+                      }
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-glass-3 mt-2 text-[11px]">Higher is faster; gold sessions beat every one before them.</p>
+            </>
+          )}
+        </Tile>
+
+        <Tile className="p-[22px]">
+          <SectionTitle>Fastest Reps</SectionTitle>
+          {bests.length === 0 ? (
+            <p className="text-glass-3 py-12 text-center text-sm">Reps with a distance and a time show up here.</p>
+          ) : (
+            <ul className="divide-y divide-white/10">
+              {bests.map((b) => (
+                <li key={b.distanceM} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span className="text-glass w-16 shrink-0">{formatMetres(b.distanceM)}</span>
+                  <span className="num text-glass flex-1">{formatClock(b.sec)}</span>
+                  <span className="num text-glass-3 hidden text-xs sm:inline">
+                    {formatPace("run", b.sec / (b.distanceM / 1000))}
+                  </span>
+                  <span className="text-glass-3 w-24 shrink-0 text-right text-xs">{formatDate(b.date)}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </Tile>
       </div>

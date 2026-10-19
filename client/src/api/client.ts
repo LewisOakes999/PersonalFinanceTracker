@@ -29,6 +29,7 @@ import type {
   TrendPoint,
   User,
   BodyWeight,
+  IntervalRep,
   Workout,
   WorkoutKind,
   WorkoutPreset,
@@ -44,6 +45,8 @@ export type WorkoutInput = {
   distanceKm: number | null;
   notes: string | null;
   sets: Pick<WorkoutSet, "exercise" | "reps" | "weightKg">[];
+  intervals: IntervalRep[];
+  recoverySec: number | null;
 };
 
 import { toast } from "./../lib/toast";
