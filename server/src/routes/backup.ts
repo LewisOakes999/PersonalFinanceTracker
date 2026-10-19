@@ -188,6 +188,18 @@ backupRouter.post(
       await prisma.fitnessGoal.deleteMany({ where: { userId } });
       await prisma.fitnessGoal.createMany({ data: withUser(data.fitnessGoals) });
     }
+    // Which spending counts as fitness — only categories that were restored.
+    if (Array.isArray(data.settings?.fitnessSpending)) {
+      const restored = new Set(plain(data.categories).map((c) => c?.id));
+      const fitnessSpending = data.settings.fitnessSpending.filter(
+        (c: { categoryId?: unknown }) => typeof c?.categoryId === "string" && restored.has(c.categoryId)
+      );
+      await prisma.settings.upsert({
+        where: { userId },
+        update: { fitnessSpending },
+        create: { userId, fitnessSpending },
+      });
+    }
     if (typeof data.settings?.weeklyWorkoutGoal === "number") {
       await prisma.settings.upsert({
         where: { userId },

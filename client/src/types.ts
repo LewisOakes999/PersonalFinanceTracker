@@ -320,6 +320,19 @@ export interface FitnessGoal {
   createdAt: string;
 }
 
+/** A spending category counted as fitness, and the workouts it pays for (none: all). */
+export interface FitnessSpendingChoice {
+  categoryId: string;
+  kinds: WorkoutKind[];
+}
+
+/** Each chosen category's spend per month, oldest first, in the main currency. */
+export interface FitnessSpending {
+  baseCurrency: string;
+  months: string[]; // YYYY-MM
+  categories: { id: string; name: string; color: string; kinds: WorkoutKind[]; totals: number[] }[];
+}
+
 export interface Totals {
   income: number;
   expenses: number;

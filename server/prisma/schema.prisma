@@ -335,6 +335,9 @@ model Settings {
   user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   currency          String @default("GBP")
   weeklyWorkoutGoal Int    @default(3) // workouts per week, for the fitness streak
+  // Spending that's for fitness, and the workouts each category pays for:
+  // [{ categoryId, kinds }] — no kinds means every workout. Gives cost per visit.
+  fitnessSpending   Json   @default("[]")
 }
 
 // A logged workout. Strength sessions carry sets; runs, rides, swims and walks

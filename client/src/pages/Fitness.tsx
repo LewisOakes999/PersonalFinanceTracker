@@ -15,11 +15,12 @@ import {
 } from "recharts";
 import { Plus } from "lucide-react";
 import { api } from "../api/client";
-import type { BodyWeight, FitnessGoal, Gear, Workout, WorkoutKind, WorkoutPreset } from "../types";
+import type { BodyWeight, FitnessGoal, FitnessSpending, Gear, Workout, WorkoutKind, WorkoutPreset } from "../types";
 import { Button, Field, SectionTitle, StatTile, Tile } from "../components/ui";
 import { LogWorkoutModal } from "../components/LogWorkoutModal";
 import { GoalModal, GoalsTile, GoalsView } from "../components/FitnessGoals";
 import { KitModal, KitView } from "../components/Kit";
+import { CostsSection, SpendingModal } from "../components/TrainingCosts";
 import { defaultKit } from "../lib/kit";
 import { goalStatus, goalTitle, newlyReached, type GoalStatus } from "../lib/goals";
 import {
@@ -69,7 +70,7 @@ const HEADINGS: Record<FitnessView, { title: string; blurb: string }> = {
   cardio: { title: "Cardio", blurb: "Distance and pace for your runs, rides, swims and walks" },
   weight: { title: "Body weight", blurb: "Your weight and body fat over time" },
   goals: { title: "Fitness goals", blurb: "Targets for your lifts, times and weight, and when you'll reach them" },
-  kit: { title: "Kit & costs", blurb: "How far your kit has gone, and what it's cost per km" },
+  kit: { title: "Kit & costs", blurb: "What your training costs, and how far your kit has gone" },
 };
 
 /** "14 Oct" — for chart axes, where the year is noise. */
@@ -92,16 +93,24 @@ export default function Fitness({
   const [editingGoal, setEditingGoal] = useState<FitnessGoal | "new" | null>(null);
   const [gear, setGear] = useState<Gear[]>([]);
   const [editingKit, setEditingKit] = useState<Gear | "new" | null>(null);
+  const [spending, setSpending] = useState<FitnessSpending | null>(null);
+  const [choosingSpending, setChoosingSpending] = useState(false);
 
   const loadWorkouts = () => api.listWorkouts().then((w) => (setWorkouts(w), w));
   const loadWeights = () => api.listBodyWeights().then((w) => (setWeights(w), w));
   const loadPresets = () => api.listPresets().then(setPresets).catch(() => setPresets([]));
   const loadGoals = () => api.listFitnessGoals().then(setGoals).catch(() => setGoals([]));
   const loadGear = () => api.listGear().then(setGear).catch(() => setGear([]));
+  const loadSpending = () =>
+    api
+      .getFitnessSpending(12)
+      .then(setSpending)
+      .catch(() => setSpending(null));
   useEffect(() => {
     loadPresets();
     loadGoals();
     loadGear();
+    loadSpending();
     loadWorkouts().catch((e) => toast.error((e as Error).message));
     loadWeights().catch(() => setWeights([]));
     api
@@ -171,6 +180,7 @@ export default function Fitness({
     toast.success(editingKit === "new" ? `Added “${g.name}”.` : "Kit updated.");
     setEditingKit(null);
     loadGear();
+    loadSpending(); // a newly linked purchase moves from its category's spend to kit
   };
 
   const removeGoal = async (g: FitnessGoal) => {
@@ -250,13 +260,19 @@ export default function Fitness({
       {workouts && view === "goals" && (
         <GoalsView statuses={statuses} onNew={() => setEditingGoal("new")} onEdit={setEditingGoal} onDelete={removeGoal} />
       )}
+      {workouts && view === "kit" && spending && (
+        <CostsSection data={spending} workouts={workouts} gear={gear} onChoose={() => setChoosingSpending(true)} />
+      )}
       {workouts && view === "kit" && (
         <KitView
           gear={gear}
           workouts={workouts}
           onAdd={() => setEditingKit("new")}
           onEdit={setEditingKit}
-          onChanged={loadGear}
+          onChanged={() => {
+            loadGear();
+            loadSpending();
+          }}
         />
       )}
 
@@ -270,6 +286,17 @@ export default function Fitness({
           onSaved={saved}
           gear={gear}
           defaultGear={(kind) => defaultKit(kind, gear, workouts ?? [])}
+        />
+      )}
+      {choosingSpending && spending && (
+        <SpendingModal
+          current={spending.categories}
+          onClose={() => setChoosingSpending(false)}
+          onSaved={() => {
+            setChoosingSpending(false);
+            toast.success("Fitness spending updated.");
+            loadSpending();
+          }}
         />
       )}
       {editingKit && (

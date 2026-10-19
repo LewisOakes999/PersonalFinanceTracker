@@ -30,6 +30,8 @@ import type {
   User,
   BodyWeight,
   FitnessGoal,
+  FitnessSpending,
+  FitnessSpendingChoice,
   Gear,
   IntervalRep,
   Workout,
@@ -381,6 +383,9 @@ export const api = {
   updateGear: (id: string, data: GearInput) =>
     request<Gear>(`/fitness/gear/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteGear: (id: string) => request<void>(`/fitness/gear/${id}`, { method: "DELETE" }),
+  getFitnessSpending: (months = 12) => request<FitnessSpending>(`/fitness/spending?months=${months}`),
+  setFitnessSpending: (choices: FitnessSpendingChoice[]) =>
+    request<FitnessSpendingChoice[]>("/fitness/spending", { method: "PUT", body: JSON.stringify(choices) }),
   listFitnessGoals: () => request<FitnessGoal[]>("/fitness/goals"),
   createFitnessGoal: (data: FitnessGoalInput) =>
     request<FitnessGoal>("/fitness/goals", { method: "POST", body: JSON.stringify(data) }),

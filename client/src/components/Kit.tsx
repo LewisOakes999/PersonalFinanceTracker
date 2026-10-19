@@ -85,6 +85,7 @@ export function KitView({
 
   return (
     <>
+      <h2 className="pt-2 text-[19px] font-semibold tracking-tight text-glass">Kit</h2>
       {active.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {active.map((s) => (

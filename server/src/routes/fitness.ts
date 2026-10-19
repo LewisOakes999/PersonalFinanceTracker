@@ -6,6 +6,7 @@ import { asyncHandler, HttpError } from "../lib/http.js";
 import { getUserId } from "../lib/auth.js";
 import { resolveRange } from "../lib/range.js";
 import { toNumber } from "../lib/serialize.js";
+import { getConversion } from "../lib/currency.js";
 
 export const fitnessRouter = Router();
 
@@ -529,5 +530,118 @@ fitnessRouter.delete(
     const result = await prisma.gear.deleteMany({ where: { id: req.params.id, userId: getUserId(req) } });
     if (result.count === 0) throw new HttpError(404, "Kit not found");
     res.status(204).end();
+  })
+);
+
+// What training costs: the spending categories that are for fitness (a gym
+// membership, class passes), and the workouts each one pays for — so a month
+// of gym fees divided by that month's gym visits gives the cost per visit.
+const spendingInput = z
+  .array(
+    z.object({
+      categoryId: z.string().min(1),
+      kinds: z.array(z.enum(WORKOUT_KINDS)).max(WORKOUT_KINDS.length).default([]), // none: every workout
+    })
+  )
+  .max(20);
+type SpendingConfig = z.infer<typeof spendingInput>;
+
+/** The saved choice, tolerating anything odd in the stored JSON. */
+const readSpending = (json: unknown): SpendingConfig => {
+  const parsed = spendingInput.safeParse(json);
+  return parsed.success ? parsed.data : [];
+};
+
+const monthKey = (d: Date) => d.toISOString().slice(0, 7);
+
+// PUT /api/fitness/spending — choose the categories, and the workouts each pays for.
+fitnessRouter.put(
+  "/spending",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const config = spendingInput.parse(req.body);
+    const unique = [...new Map(config.map((c) => [c.categoryId, { ...c, kinds: [...new Set(c.kinds)] }])).values()];
+    const ids = unique.map((c) => c.categoryId);
+    const found = await prisma.category.count({ where: { userId, id: { in: ids }, type: "expense" } });
+    if (found !== ids.length) throw new HttpError(400, "Pick your own spending categories.");
+    await prisma.settings.upsert({
+      where: { userId },
+      update: { fitnessSpending: unique },
+      create: { userId, fitnessSpending: unique },
+    });
+    res.json(unique);
+  })
+);
+
+// GET /api/fitness/spending?months=12 — each chosen category's spend per
+// month, oldest first, in the main currency. Split transactions count their
+// matching lines; a purchase linked to kit is left out, since the kit's own
+// price already counts it.
+fitnessRouter.get(
+  "/spending",
+  asyncHandler(async (req, res) => {
+    const userId = getUserId(req);
+    const count = Math.min(36, Math.max(1, Math.floor(Number(req.query.months)) || 12));
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (count - 1), 1));
+    const months = Array.from({ length: count }, (_, i) =>
+      monthKey(new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1)))
+    );
+    const settings = await prisma.settings.findUnique({ where: { userId } });
+    const config = readSpending(settings?.fitnessSpending);
+    const ids = config.map((c) => c.categoryId);
+
+    const [txns, categories, accounts, conv, linked] = await Promise.all([
+      ids.length
+        ? prisma.transaction.findMany({
+            where: {
+              userId,
+              type: "expense",
+              date: { gte: start, lte: now },
+              OR: [{ categoryId: { in: ids } }, { splits: { some: { categoryId: { in: ids } } } }],
+            },
+            select: {
+              id: true,
+              date: true,
+              amount: true,
+              categoryId: true,
+              accountId: true,
+              splits: { select: { categoryId: true, amount: true } },
+            },
+          })
+        : [],
+      prisma.category.findMany({ where: { userId, id: { in: ids } } }),
+      prisma.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
+      getConversion(userId),
+      prisma.gear.findMany({ where: { userId, transactionId: { not: null } }, select: { transactionId: true } }),
+    ]);
+    const skip = new Set(linked.map((g) => g.transactionId));
+    const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
+    const totals = new Map(ids.map((id) => [id, months.map(() => 0)]));
+    for (const t of txns) {
+      if (skip.has(t.id)) continue;
+      const i = months.indexOf(monthKey(t.date));
+      if (i === -1) continue;
+      const currency = currencyOf.get(t.accountId) ?? conv.base;
+      const lines = t.splits.length > 0 ? t.splits : [{ categoryId: t.categoryId, amount: t.amount }];
+      for (const line of lines) {
+        const row = totals.get(line.categoryId);
+        if (row) row[i] += conv.toBase(toNumber(line.amount), currency);
+      }
+    }
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    res.json({
+      baseCurrency: conv.base,
+      months,
+      categories: config
+        .filter((c) => byId.has(c.categoryId))
+        .map((c) => ({
+          id: c.categoryId,
+          name: byId.get(c.categoryId)!.name,
+          color: byId.get(c.categoryId)!.color,
+          kinds: c.kinds,
+          totals: totals.get(c.categoryId)!.map((n) => Math.round(n * 100) / 100),
+        })),
+    });
   })
 );
